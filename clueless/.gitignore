@@ -1,0 +1,46 @@
+# Compiled class file
+*.class
+
+# Log file
+*.log
+
+# Package Files #
+*.jar
+*.war
+*.ear
+
+# Maven:
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.nextBackup
+pom.xml.timestampBackup
+
+# Gradle:
+.gradle
+build/
+!gradle/wrapper/dist
+!gradle/wrapper/dists
+
+# Intellij
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Eclipse
+.settings/
+.project
+bin/
+
+# NetBeans
+nbproject/
+
+# Temporary files created by developers
+*.tmp
+*~
+
+# OS-specific files
+.DS_Store
+Thumbs.db
