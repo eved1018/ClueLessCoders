@@ -4,15 +4,19 @@ package cluelesscoders.clueless;
  * Code to run server for clueless
  * @author Last Edited by : Chris Dixon
  */
-import java.net.*;
-import java.io.*;
-import java.util.*;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
+import java.util.Scanner;
 
 public class Server {
     
     private ServerSocket clServer;
-    private DataInputStream  pin;
-    private DataOutputStream  pout;
+    private ObjectInputStream  pin;
+    private ObjectOutputStream  pout;
     private int currPlayerCt = 0; 
             
     /**
@@ -40,8 +44,8 @@ public class Server {
                 try{       
                         Socket player =  clServer.accept();                        
                         
-                        pin = new DataInputStream(player.getInputStream());
-                        pout = new DataOutputStream(player.getOutputStream());
+                        pin = new ObjectInputStream(player.getInputStream());
+                        pout = new ObjectOutputStream(player.getOutputStream());
                         
                         currPlayerCt = 
                                 Thread.currentThread().getThreadGroup().activeCount() - 2;
@@ -99,6 +103,7 @@ public class Server {
      * @throws IOException 
      */
     public void start() throws IOException{
+        System.out.println("Server Up");
         Scanner input = new Scanner(System.in); 
         
         checkConnections.start();
@@ -112,6 +117,7 @@ public class Server {
                 break;
             }
         }
+
     }
     
 }
@@ -123,8 +129,8 @@ public class Server {
 class PlayerThread extends Thread{
     
     private final Socket s;
-    private final DataInputStream  in;
-    private final DataOutputStream  out;
+    private final ObjectInputStream  in;
+    private final ObjectOutputStream  out;
     private final int playerNum;
     
     /**
@@ -140,7 +146,7 @@ class PlayerThread extends Thread{
      * @param playerNum player index, a little buggy
      * @throws IOException 
      */
-    PlayerThread(Socket s, DataInputStream in, DataOutputStream out, int playerNum) throws IOException{
+    PlayerThread(Socket s, ObjectInputStream in, ObjectOutputStream out, int playerNum) throws IOException{
         this.s = s;
         this.in = in;
         this.out = out;
@@ -154,11 +160,19 @@ class PlayerThread extends Thread{
     @Override
     public void run(){
         try{
-            out.writeUTF("Welcome Player Number " + playerNum);
+
             System.out.println("Player " + playerNum + " connected");
+            Packet p = new Packet(0 , "Welcome Player Number " + playerNum);
+            out.writeObject(p);
+
             while(true){
-                String input = in.readUTF();
-                if(input.equals(ESC_SEQ)){
+                Object rev_obj =  in.readObject();
+                if (!(rev_obj instanceof Packet)) {
+                    break;
+                }
+                Packet input = (Packet) rev_obj;
+                String input_text = input.text;
+                if(input_text.equals(ESC_SEQ)){
                     
                     this.s.close();
                     this.in.close();
@@ -168,10 +182,18 @@ class PlayerThread extends Thread{
                     
                     break;
                 }
+                else {
+                    
+                    System.out.println("Message from player " + playerNum + ":\t" + input_text + " | " + input.d);
+                    Packet r = new Packet(0, "Message received");
+                    out.writeObject(r);
+                }
+                
             }
         }
         catch(IOException e){
             System.out.println(e);
+        } catch (ClassNotFoundException ex) {
         }
     }
              
