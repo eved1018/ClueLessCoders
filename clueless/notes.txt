@@ -67,8 +67,8 @@ if PlayerSuggestion:
 
 
 TODO: 
-    - allow game ot be from 3-6 players
-    - impl Game 
+    - allow game ot be from 3-6 players (add startgame packet)
+    - impl game board logic (ie movement)
     - Combine all broadcasts to one Packet
     - Combine all turn to one packet 
     - impl logic for out player
