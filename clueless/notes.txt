@@ -1,0 +1,82 @@
+
+// wait for players to connect to game
+// select weapon, person and room for murder - randomize each players hand 
+// broadcast game start - send each player their hand,  starting location and turn number
+// Game loop:
+    // while (game isnt over)
+        // if player is out
+            // continue 
+        // initiate turn of player n:
+            // send TurnRequest to player n 
+            // wait for PlayerTurn
+            // repeat if  playerTurn is invalid 
+            // if playerTurn is move:
+                // broadcast move 
+            // if player suggest
+                // update position of suggested player
+                // TurnBroadcast (player n suggested xyz - UI should update curr and suggested player location) 
+                // for p in players:
+                    // if disprovable player (ie has card that matches room, person or place)
+                        // send suggestRequest to player p
+                        // wait for playerDisprove 
+                        // DisproveResponse to player n  (who disaproved and how )
+                        // DisproveBroadcast to all (who disaproved but not how)
+                    // else
+                        // DisproveBroadcast ( suggestion was not disaproved by player p)
+            
+            // if player accuses:
+                // if accusation correct 
+                    // end game
+                // else:
+                    // TurnBroadcast (player n was wrong)
+                    // mark player as "out"
+        // n++
+
+
+
+
+Client:
+
+Connect to server
+rec NewPlayerBroadcast
+send startGame
+rcv GameStartBroadcast -> Update UI with Hand and location of each player
+
+rcv BroadcastMove  -> Update UI since another player has moved
+rcv BroadcastPlayerOut -> update UI 
+rcv BroadcastGameOver -> Show winner and quit
+rcv SuggestBroadcast -> Update UI
+rcv DisproveRequest -> Send back DisproveResponse (which card u disprove with)
+rcv DisproveSkip - > Update ui (player x cannot disprove )
+rcv DisproveBroadcast -> Update UI (player x disproved player Y)
+
+[TURN]
+rcv TurnRequest -> Collect Turn from user -> send PlayerMovePlayerMove or PlayerSuggestion
+
+if send PlayerMove:
+    rcv BroadcastMove -> Update UI since we moved (or do this already and skip)
+
+if PlayerSuggestion:
+    if accused true:
+        rcv BroadcastGameOver -> Show winner and quit 
+    if accused false:
+        rcv BroadcastPlayerOut -> update UI 
+    
+    if suggest:
+        rcv SuggestionResponse -> Update UI (player Y disproved with card c)
+
+
+TODO: 
+    - allow game ot be from 3-6 players
+    - impl Game 
+    - Combine all broadcasts to one Packet
+    - Combine all turn to one packet 
+    - impl logic for out player
+    - impl game per thread on server 
+
+
+
+
+
+
+

@@ -7,6 +7,10 @@ import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Scanner;
+import cluelesscoders.clueless.Packet;
+import cluelesscoders.clueless.Player;
+
+
 /** Code to run client 
  *
  * @author Chris Dixon
@@ -25,6 +29,118 @@ public class Client {
      * Character to close Thread..
      */
     private static final String ESC_SEQ= "X";
+
+
+    public Boolean readInput(Scanner input, String line){
+        if (input.hasNextLine()) {
+            line = input.nextLine();
+            if (line.equals(ESC_SEQ)){
+                return false;
+            }
+        }
+        return true;
+    }
+   
+
+
+    public Boolean handlePacketRcv(Packet pkt, Scanner input, ObjectOutputStream out){
+        try {
+            if (pkt instanceof TextPacket) {
+                TextPacket tp = (TextPacket) pkt;
+                System.out.println("Server: " + tp.text);
+                 
+                if (tp.respond){
+                    System.out.print("Respond: ");
+                    String line = null;
+                    if (input.hasNextLine()) {
+                        line = input.nextLine();
+                    }
+                    TextPacket tps = new TextPacket(line);
+                    out.writeObject(tps);
+                    
+                }
+
+            }
+
+
+            else if (pkt instanceof TurnRequest ) {
+                TurnRequest tp = (TurnRequest) pkt;
+                
+                // tp will have some info about what turn types the player can make 
+                System.out.println("Server: Its your turn. Pick one of [M]ove [S]uggest [A]ccuse");
+                // prompt for turn 
+                String line = null;
+                if (input.hasNextLine()) {
+                    line = input.nextLine();
+                }
+
+                if (line.toLowerCase().equals("m")){
+                    System.out.println("Enter a room to move too: " + tp.valid_moves);
+                    String line2 = null;
+                    if (input.hasNextLine()) {
+                        line2 = input.nextLine();
+                    }
+                    //TODO  check that line is a valid room:
+
+                    Room room = Room.valueOf(line2);
+                    PlayerMove pm = new PlayerMove(room);
+                    out.writeObject(pm);
+                }
+            
+            } else if (pkt instanceof NewPlayerbroadcast) {
+                NewPlayerbroadcast npb = (NewPlayerbroadcast) pkt;
+                System.out.println("Print new player " + npb.name);
+            } else if (pkt instanceof GameStartBroadcast){
+                // GameStartBroadcast gsb = (GameStartBroadcast) pkt;
+                System.out.println("Game Starting");
+            } else if (pkt instanceof BroadcastMove ){
+                BroadcastMove bm = (BroadcastMove) pkt;
+                System.out.println("Player " + bm.name + " moved to " + bm.new_room);
+            } else if (pkt instanceof DisproveRequest ){
+
+                DisproveRequest dr = (DisproveRequest) pkt;
+                System.out.println("Disprove with " + dr.options);
+                String disprove_with = null;
+                if (input.hasNextLine()) {
+                    disprove_with = input.nextLine();
+                }
+                // to any error handeling here
+                DisproveResponse disproveResponse = new DisproveResponse(disprove_with);
+                out.writeObject(disproveResponse);
+            } else if (pkt instanceof SuggestionResponse)  {
+                SuggestionResponse  sr = (SuggestionResponse) pkt;
+                System.out.println("Suggestion was disproved by " + sr.disprover + " with " + sr.disproved_with);
+            } else if (pkt instanceof BroadcastPlayerOut ) {
+                BroadcastPlayerOut bpo = (BroadcastPlayerOut) pkt;
+                System.out.println("Player " + bpo.player);
+            } else if (pkt instanceof DisproveSkip ) {
+                DisproveSkip dsk = (DisproveSkip) pkt;
+                System.out.println("Player " + dsk.player + " could not disporve suggestion");
+            } else if (pkt instanceof SuggestBroadcast) {
+                SuggestBroadcast sgb = (SuggestBroadcast) pkt;
+                System.out.println("Player " + sgb.suggester + " Suggests the murder was done by " + sgb.suspect + " in the " + sgb.room + " with the " + sgb.weapon );
+            
+            } else if (pkt instanceof BroadcastGameOver) {
+                BroadcastGameOver  bgo = (BroadcastGameOver) pkt;
+                System.out.println(bgo.winner + " has won the game");
+            } else if (pkt instanceof DisproveBroadcast){
+                DisproveBroadcast dbc = (DisproveBroadcast) pkt;
+                System.out.println("Player " + dbc.disprover + " disproved the suggestion");
+            }            
+            else {
+
+                System.out.println("Cant decode packet");
+
+
+            }
+        } catch (IOException e) {
+            System.out.println(e);
+        }
+            
+
+        return true;
+
+    }
     
     /**
      * Constructor.
@@ -45,39 +161,29 @@ public class Client {
         
         ObjectOutputStream cout = new ObjectOutputStream(cs.getOutputStream()); // Note: cout must be initialized before cin 
         ObjectInputStream cin = new ObjectInputStream(cs.getInputStream());
-        System.out.println("Client started 2");
-        
 
         Scanner input = new Scanner(System.in);
-        String next_line;
-        Packet p;
+        Packet p;        
+        Boolean run = true;
+        try {
+            //initial respponse from sever
+            p = (Packet) cin.readObject();
+            run =  handlePacketRcv(p, input, cout);
 
-        while (true){
-            try {
-                System.out.println("Packet sent from server: ");
-                Packet rcv = (Packet) cin.readObject();
-                System.out.println(rcv.text);
-                System.out.println(rcv.arr.get(0));
+            while (run){
                 
-                System.out.println("Enter packet to sent to server: ");
-                if(input.hasNextLine()){
-                    next_line = input.nextLine();
-                    if(next_line.equals(ESC_SEQ)){
-                        p = new Packet(0, ESC_SEQ);
-                        cout.writeObject(p);
-                        break;
-                    }
-                    else {
-                        p = new Packet(5, next_line);
-                        cout.writeObject(p);
-                    }
-                }
-            } catch (ClassNotFoundException ex) {
-                System.err.println("Error");
-            }
-           
+                // // wait until server asks for something or tell us to update UI:
+                p = (Packet) cin.readObject();
+                run =  handlePacketRcv(p, input, cout);
+                
 
+                
+            }
+            
+        } catch (ClassNotFoundException ex) {
+            System.err.println("Error");
         }
+           
         System.out.println("Closing connection");
         input.close();
         cs.close();
