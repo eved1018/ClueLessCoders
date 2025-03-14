@@ -7,10 +7,27 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+
+// TODO broadast becomes loop + packet 
+// reimpl all comm functs w new packet
 
 enum Room {
     Study, Hall,Lounge, Library, Billiard_Room, Dining_Room, Conservatory, Ballroom, Kitchen
 }
+
+enum AllRoom {
+
+    Study,          Study2Hall,             Hall,               Hall2Lounge,                Lounge,
+    Study2Library,                          Hall2BillardRoom,                               Lounge2DiningRoom,
+    Library,        Library2Billardroom,    Billiard_Room,      BilliardRoom2Diningroom,    Dining_Room,
+    Library2Conservatory,                   BilliardRoom2Ballroom,                          DiningRoom2Kitchen,
+    Conservatory,   Conservatory2Ballroom,  Ballroom,           Ballroom2Kitchen,           Kitchen,         
+}
+
+
 
 enum PlayerName {
     Miss_Scarlet, Colonel_Mustard, Mrs_White, Reverend_Green, Mrs_Peacock, Professor_Plum
@@ -24,7 +41,7 @@ enum Weapon {
 // prob only need a hashmap for each players current loc 
 // and then another map for neighbors 
 public class Game {
-    ArrayList<PlayerName> active_players;
+    ArrayList<Player> player_list; // all players
     ArrayList<PlayerName> board;
     public Weapon secret_weapon;
     public PlayerName secret_person;
@@ -35,7 +52,8 @@ public class Game {
         this.board = new ArrayList<PlayerName>();
     }
 
-    public void start_game(ArrayList<PlayerName> active_players){
+    public void start_game(ArrayList<Player> player_list){
+        this.player_list = player_list;
         ArrayList<Weapon> weapons = new ArrayList<Weapon>(Arrays.asList(Weapon.values()));
         ArrayList<PlayerName> player_names = new ArrayList<PlayerName>(Arrays.asList(PlayerName.values()));
         ArrayList<Room> rooms = new ArrayList<Room>(Arrays.asList(Room.values()));
@@ -67,17 +85,122 @@ public class Game {
         Collections.shuffle(cards);
         // Add cards to each player hands - hands size doesnt matter
         while (!cards.isEmpty()){
-            for (PlayerName p : active_players ){
-                if (hands.containsKey(p)){
-                    hands.get(p).add(cards.removeFirst());
+            for (Player p : player_list ){
+                if (this.hands.containsKey(p.name)){
+                    this.hands.get(p.name).add(cards.removeFirst());
 
                 } else {
                     ArrayList<String> l = new ArrayList<String>(6);
                     l.add(cards.removeFirst());
-                    hands.put(p, l);
+                    this.hands.put(p.name, l);
                 }
             }
         }
+    }
+    public void suggestionLoop(SocketPacket sgt, Player p ) {
+
+        // move suggested player to room
+
+        this.update_board(sgt.other_player, p.currRoom);
+        for (Player i: this.player_list) {
+            if (i.name.equals(sgt.other_player)) {
+                i.currRoom = p.currRoom;
+                i.moved_by_suggest = true;
+            }
+        }
+        
+        // can prob combine these
+        broadcastMove(sgt.other_player, p.currRoom); // this should handle updating the suspects position on the UI
+        suggestBroadcast(sgt.other_player, sgt.murder_weapon, p.currRoom, p.name); // Notify all players of suggestion (ie a ui thing)
+
+        // ring buffer
+        int size = this.player_list.size();
+        int start = p.player_number;
+        Player op;
+        String disprove_with;
+        for (int i = 0; i < size; i++){
+            int index = (start + 1 + i ) % size; // wrap list 
+            op = this.player_list.get(index);
+            ArrayList<String> oph = this.get_hand(op.name);
+            ArrayList<String> suspecthand = new ArrayList<String>();
+            suspecthand.add(sgt.other_player.toString());
+            suspecthand.add(sgt.murder_weapon.toString());
+            suspecthand.add(p.currRoom.toString());
+
+            // set notation to get intersection 
+            Set<String> overlap = oph.stream()
+                .distinct()
+                .filter(suspecthand::contains)
+                .collect(Collectors.toSet());
+
+            if (overlap.size() > 0){
+
+                if (overlap.size() == 1) {
+                    disprove_with = overlap.stream().findFirst().orElse(null);
+    
+                } else {
+                    DisproveResponse dr = op.sendDisproveRequest(suspecthand);
+                    disprove_with = dr.disprove_with;
+                }                
+                p.sendSuggestResponse(op.name, disprove_with);
+                broadcastDisprove(op.name, p.name);
+            }
+
+            else {
+                broadcastDisproveSkip(op.name); // player x cant disprove 
+            } 
+        }
+    }
+
+    public boolean game_loop(){
+
+        broadcastGameStart();
+
+        for (Player p: this.player_list){
+
+            if (p.is_out){
+                //TODO not sure what the rules are for for out player
+                return true;
+            }
+            
+            // check if the player can move ie are the hallways blocked
+            ArrayList<AllRoom> moves =  this.possible_moves(p.name);
+
+            Boolean can_suggest = true;
+            // check if player can suggest: player cant move + wasnt moved by suggestion
+            if (moves.size() == 0 && !p.moved_by_suggest) {
+                // player can only accuse 
+                can_suggest = false;
+            }
+
+            // request a turn from this player 
+            SocketPacket rpkt = p.playerTurnRequest(can_suggest, moves);
+
+            if (rpkt.turn_type == SocketPacket.TurnType.MOVE){
+                // update board 
+                AllRoom destination = rpkt.player_locations.get(0); 
+                p.currRoom = destination;
+                this.update_board(p.name, destination);
+                broadcastMove(p.name, destination); // Update all players UI
+
+
+            } else if (rpkt ==  SocketPacket.TurnType.SUGGEST) {
+                suggestionLoop(rpkt, p);
+            } else if (rpkt == SocketPacket.TurnType.ACCUSE) {
+                Weapon w = rpkt.cards.get(0) //FIX 
+                if (this.check_accusation(w, rpkt.other_player, p.currRoom)){
+                    // game over 
+                    System.out.println("Game over " + p.name + " won");
+                    broadcastGameOver(p.name);
+                    return false;
+                } else {
+                    p.is_out = true;
+                    broadcastPlayerOut(p.name);
+                }
+            }
+
+        }
+        return true;
     }
 
 
@@ -85,17 +208,17 @@ public class Game {
         return hands.get(n);
     }
 
-    public void update_board(PlayerName name, Room loc) {
+    //TODO impl
+    public void update_board(PlayerName name, AllRoom loc) {
         // place player name in location loc
     }
 
-
+    //TODO impl
     // possible moves for player
-    public ArrayList<Room> possible_moves(PlayerName playername){
-        // TODO impl
-        ArrayList<Room> r = new ArrayList<Room>();
-        r.add(Room.Hall);
-        r.add(Room.Kitchen);
+    public ArrayList<AllRoom> possible_moves(PlayerName playername){
+        ArrayList<AllRoom> r = new ArrayList<AllRoom>();
+        r.add(AllRoom.Hall);
+        r.add(AllRoom.Kitchen);
         return r;
     }
 
@@ -110,6 +233,68 @@ public class Game {
 	public Room get_starting_room(PlayerName name) {
 		return Room.Study;
 	}
+
+    public void broadcastNewPlayer(PlayerName n){
+        for (Player p : this.player_list){
+            p.sendNewPlayer(n);
+        }
+    }
+
+    public void broadcastGameStart(){
+        int i = 0;
+        for (Player p : this.player_list){
+            Room start_room = this.get_starting_room(p.name);
+            ArrayList<String> player_hand = this.get_hand(p.name);
+            p.sendGameStart(player_hand, start_room, i);
+            i+=1;
+        }        
+
+    }
+
+    public void broadcastDisproveSkip(PlayerName n){
+        // player name cant disprove
+        for (Player p : this.player_list){
+            p.sendDisproveSkip(n);
+        }
+
+    }
+
+    public void suggestBroadcast(PlayerName suspect, Weapon weapon, Room room, PlayerName suggester){
+        // suggester made suggestion 
+        for (Player p : this.player_list){
+            p.sendSuggestion(suspect, weapon, room, suggester);
+        }
+    }
+
+    public void broadcastMove(PlayerName name, Room room) {
+        // player has moved to room by player 
+
+        for (Player p : this.player_list){
+            p.sendBroadcastMove(name, room);
+        }
+    }
+
+    public void broadcastDisprove(PlayerName disprover, PlayerName suggester){
+        for (Player p : this.player_list){
+            p.sendDisproveBroadcast(disprover, suggester);
+        }
+
+    }
+
+    public void broadcastGameOver(PlayerName name){
+        for (Player p : this.player_list){
+            p.sendGameOver(name);
+        }
+
+        // game over player has won
+    }
+
+    public void broadcastPlayerOut(PlayerName name){
+        // player has made false accusation 
+        for (Player p : this.player_list){
+            p.sendPlayerOut(name);
+        }
+    }
 
 
     

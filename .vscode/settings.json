@@ -1,0 +1,15 @@
+{
+    "netbeans.jdkhome": "/opt/homebrew/Cellar/openjdk/17.0.2/libexec/openjdk.jdk/Contents/Home",
+    "netbeans.project.jdkhome": "/opt/homebrew/Cellar/openjdk/17.0.2/libexec/openjdk.jdk/Contents/Home",
+    "java.jdt.ls.java.home": "/opt/homebrew/Cellar/openjdk/17.0.2/libexec/openjdk.jdk/Contents/Home",
+    "terminal.integrated.env.osx": {
+        "JAVA_HOME": "/opt/homebrew/Cellar/openjdk/17.0.2/libexec/openjdk.jdk/Contents/Home",
+        "PATH": "/opt/homebrew/Cellar/openjdk/17.0.2/libexec/openjdk.jdk/Contents/Home/bin:${env:PATH}"
+    },
+    "maven.terminal.customEnv": [
+        {
+            "environmentVariable": "JAVA_HOME",
+            "value": "/opt/homebrew/Cellar/openjdk/17.0.2/libexec/openjdk.jdk/Contents/Home"
+        }
+    ]
+}
