@@ -12,11 +12,7 @@ import cluelesscoders.clueless.Clueless.*;
 
 
 class Packet implements Serializable  {
-
-
-
     // What do we need here??
-
     public Packet() {
        
     }

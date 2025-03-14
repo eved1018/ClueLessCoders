@@ -6,9 +6,6 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 
-import javax.lang.model.SourceVersion;
-
-
 public class Player {
     ArrayList<String> hand;
     AllRoom currRoom;
@@ -106,6 +103,11 @@ public class Player {
         p.broadcast_type = SocketPacket.BroadcastType.NEW_PLAYER;
         p.player_locations.add(start_room.toString());
         p.turn_number = player_number;
+        try {
+            out.writeObject(p);
+        } catch (IOException e) {
+            System.out.println(e);
+        } 
 
     }
 
