@@ -62,7 +62,7 @@ class SocketPacket extends Packet {
         DISPROVE_RESPONSE, DISPROVE_REQUEST, DISPROVED_WITH
     }
     enum BroadcastType {
-        GAME_STATE, NEW_PLAYER, TURN_MADE, PLAYER_OUT, DISPROVE_MESSAGE 
+        GAME_STATE, NEW_PLAYER, TURN_MADE, PLAYER_OUT, DISPROVE_MESSAGE , DISPROVE_SKIP
     }
 
     
@@ -79,7 +79,8 @@ class SocketPacket extends Packet {
 
     public int turn_number;
     public ArrayList<String> cards;  // TODO use an enum for cards (person/weapon)
-    public ArrayList<AllRoom> player_locations; //TODO: change type to match board
+    public ArrayList<String> player_locations; //TODO: change type to match board
+    public Room crime_scene;
     public GameState game_state_update;
     public Weapon murder_weapon;
 

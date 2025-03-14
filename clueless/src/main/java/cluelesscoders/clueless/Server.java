@@ -62,7 +62,7 @@ public class Server {
 
                     Player new_player = new Player(playerSocket, pin, pout, player_num);
                     playerList.add(new_player);
-                    broadcastNewPlayer(new_player.name);
+                    // broadcastNewPlayer(new_player.name);
 
                 }
                 catch(SocketException e){

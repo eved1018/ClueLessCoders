@@ -139,15 +139,15 @@ public class Game {
                     disprove_with = overlap.stream().findFirst().orElse(null);
     
                 } else {
-                    DisproveResponse dr = op.sendDisproveRequest(suspecthand);
-                    disprove_with = dr.disprove_with;
+                    SocketPacket dr = op.sendDisproveRequest(suspecthand);
+                    disprove_with = dr.cards.get(0).toString();
                 }                
                 p.sendSuggestResponse(op.name, disprove_with);
                 broadcastDisprove(op.name, p.name);
             }
 
             else {
-                broadcastDisproveSkip(op.name); // player x cant disprove 
+                broadcastDisproveSkip(op.name, p.name); // player x cant disprove 
             } 
         }
     }
@@ -174,21 +174,23 @@ public class Game {
             }
 
             // request a turn from this player 
-            SocketPacket rpkt = p.playerTurnRequest(can_suggest, moves);
+            Boolean can_accuse = true; //FIX ME 
+            SocketPacket rpkt = p.playerTurnRequest(moves,can_suggest, can_accuse);
 
             if (rpkt.turn_type == SocketPacket.TurnType.MOVE){
                 // update board 
-                AllRoom destination = rpkt.player_locations.get(0); 
+                AllRoom destination = AllRoom.valueOf(rpkt.player_locations.get(0)); 
                 p.currRoom = destination;
                 this.update_board(p.name, destination);
                 broadcastMove(p.name, destination); // Update all players UI
 
 
-            } else if (rpkt ==  SocketPacket.TurnType.SUGGEST) {
+            } else if (rpkt.turn_type ==  SocketPacket.TurnType.SUGGEST) {
                 suggestionLoop(rpkt, p);
-            } else if (rpkt == SocketPacket.TurnType.ACCUSE) {
-                Weapon w = rpkt.cards.get(0) //FIX 
-                if (this.check_accusation(w, rpkt.other_player, p.currRoom)){
+            } else if (rpkt.turn_type == SocketPacket.TurnType.ACCUSE) {
+                Weapon w = Weapon.valueOf(rpkt.cards.get(0)); //FIX 
+
+                if (this.check_accusation(w, rpkt.other_player, rpkt.crime_scene)){
                     // game over 
                     System.out.println("Game over " + p.name + " won");
                     broadcastGameOver(p.name);
@@ -222,6 +224,17 @@ public class Game {
         return r;
     }
 
+    public boolean is_suggestable_room(String r){
+        // check if room is a room u can suggest in
+        Room[] rooms = Room.values();
+        for (Room i: rooms){
+            if (i.toString().equals(r)){
+                return true;
+            }
+        }
+        return false;
+    }
+
     public boolean check_accusation(Weapon w, PlayerName n, Room r) {
         if (w == this.secret_weapon && n == this.secret_person && r == this.secret_room){
             return true;
@@ -230,20 +243,26 @@ public class Game {
     }
 
     //TODO impl
-	public Room get_starting_room(PlayerName name) {
-		return Room.Study;
+	public AllRoom get_starting_room(PlayerName name) {
+		return AllRoom.Study;
 	}
 
     public void broadcastNewPlayer(PlayerName n){
-        for (Player p : this.player_list){
-            p.sendNewPlayer(n);
+        SocketPacket p = new SocketPacket();
+        p.packet_type = SocketPacket.PacketType.BROADCAST;
+        p.broadcast_type = SocketPacket.BroadcastType.NEW_PLAYER;
+        p.curr_player = n;
+
+        for (Player player : this.player_list){
+            player.sendPacket(p);
+            
         }
     }
 
     public void broadcastGameStart(){
         int i = 0;
         for (Player p : this.player_list){
-            Room start_room = this.get_starting_room(p.name);
+            AllRoom start_room = this.get_starting_room(p.name);
             ArrayList<String> player_hand = this.get_hand(p.name);
             p.sendGameStart(player_hand, start_room, i);
             i+=1;
@@ -251,48 +270,86 @@ public class Game {
 
     }
 
-    public void broadcastDisproveSkip(PlayerName n){
+    public void broadcastDisproveSkip(PlayerName suggester, PlayerName disprover){
         // player name cant disprove
-        for (Player p : this.player_list){
-            p.sendDisproveSkip(n);
+        SocketPacket p = new SocketPacket();
+        p.packet_type = SocketPacket.PacketType.BROADCAST;
+        p.broadcast_type = SocketPacket.BroadcastType.DISPROVE_SKIP;
+        p.other_player = disprover;
+        p.curr_player = suggester;
+
+        for (Player player : this.player_list){
+            player.sendPacket(p);
+            
         }
+
 
     }
 
-    public void suggestBroadcast(PlayerName suspect, Weapon weapon, Room room, PlayerName suggester){
+    public void suggestBroadcast(PlayerName suspect, Weapon weapon, AllRoom room, PlayerName suggester){
+        SocketPacket p = new SocketPacket();
+        p.broadcast_type = SocketPacket.BroadcastType.TURN_MADE;
+        p.packet_type = SocketPacket.PacketType.BROADCAST;
+        p.crime_scene = Room.valueOf(room.toString());
+        p.other_player = suspect;
+        p.murder_weapon = weapon;
+        p.curr_player = suggester;
         // suggester made suggestion 
-        for (Player p : this.player_list){
-            p.sendSuggestion(suspect, weapon, room, suggester);
+        for (Player player : this.player_list){
+            player.sendPacket(p);
         }
     }
 
-    public void broadcastMove(PlayerName name, Room room) {
+    public void broadcastMove(PlayerName name, AllRoom room) {
         // player has moved to room by player 
-
-        for (Player p : this.player_list){
-            p.sendBroadcastMove(name, room);
+        SocketPacket p = new SocketPacket();
+        p.broadcast_type = SocketPacket.BroadcastType.TURN_MADE;
+        p.packet_type = SocketPacket.PacketType.BROADCAST;
+        p.curr_player = name;
+        p.player_locations.add(room.toString()); //make this a dict or something 
+        for (Player player : this.player_list){
+            player.sendPacket(p);
         }
     }
 
+    // player  disproved another
     public void broadcastDisprove(PlayerName disprover, PlayerName suggester){
-        for (Player p : this.player_list){
-            p.sendDisproveBroadcast(disprover, suggester);
+        SocketPacket p = new SocketPacket();
+        p.packet_type = SocketPacket.PacketType.BROADCAST;
+        p.broadcast_type = SocketPacket.BroadcastType.DISPROVE_MESSAGE;
+        p.other_player = disprover;
+        p.curr_player = suggester;
+
+        for (Player player : this.player_list){
+            player.sendPacket(p);
+            
         }
 
     }
 
+    // game over player has won
     public void broadcastGameOver(PlayerName name){
-        for (Player p : this.player_list){
-            p.sendGameOver(name);
+        SocketPacket p = new SocketPacket();
+        p.packet_type = SocketPacket.PacketType.BROADCAST;
+        p.broadcast_type = SocketPacket.BroadcastType.GAME_STATE;
+        p.game_state_update = SocketPacket.GameState.END;
+        p.curr_player = name;
+
+        for (Player player : this.player_list){
+            player.sendPacket(p);
         }
 
-        // game over player has won
     }
 
     public void broadcastPlayerOut(PlayerName name){
         // player has made false accusation 
-        for (Player p : this.player_list){
-            p.sendPlayerOut(name);
+        SocketPacket p = new SocketPacket();
+        p.packet_type = SocketPacket.PacketType.BROADCAST;
+        p.broadcast_type = SocketPacket.BroadcastType.PLAYER_OUT;
+        p.curr_player = name;
+
+        for (Player player : this.player_list){
+            player.sendPacket(p);
         }
     }
 
