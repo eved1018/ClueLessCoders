@@ -75,14 +75,14 @@ public class Client {
                                     System.out.println("Cant decode gamee state broadcast packet");
                             }
                         break;    
-                        case PLAYER_TURN:
+                        case TURN_MADE:
                             switch(pkt.turn_type){
                                 case MOVE:
                                     System.out.println("Player " + pkt.curr_player + " moved to " + pkt.destination);
                                     break;
                                 case SUGGEST:
                                     System.out.println("Player " + pkt.curr_player + " Suggests the murder was done by " + pkt.other_player
-                                    + " in the " + pkt.destination + " with the " + pkt.murder_weapon);
+                                    + " in the " + pkt.crime_scene + " with the " + pkt.murder_weapon);
                                     break;
                                 default:
                                     System.out.println("Cant decode player turn broadcast packet");

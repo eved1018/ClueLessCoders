@@ -6,7 +6,6 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 
-
 public class Player {
     ArrayList<String> hand;
     AllRoom currRoom;
@@ -88,46 +87,26 @@ public class Player {
         return null;
     }
 
+    public void sendPacket(SocketPacket packet){
+        try {
+            out.writeObject(packet);
+        } catch (IOException e) {
+            System.out.println(e);
+        } 
+    }
 
-    public void sendNewPlayer(PlayerName n) {
+    public void sendGameStart(ArrayList<String>player_hand, AllRoom start_room, int player_number){
         SocketPacket p = new SocketPacket();
-        p.curr_player = n;
         p.packet_type = SocketPacket.PacketType.BROADCAST;
         p.broadcast_type = SocketPacket.BroadcastType.NEW_PLAYER;
+        p.player_locations.add(start_room.toString());
+        p.turn_number = player_number;
         try {
             out.writeObject(p);
-
         } catch (IOException e) {
             System.out.println(e);
-        }
-    }
+        } 
 
-    public void sendGameStart() {
-        SocketPacket p = new SocketPacket();
-        p.packet_type = SocketPacket.PacketType.BROADCAST;
-        p.broadcast_type = SocketPacket.BroadcastType.GAME_STATE;
-        p.game_state_update = SocketPacket.GameState.START;
-        try {
-            out.writeObject(p);
-
-        } catch (IOException e) {
-            System.out.println(e);
-        }
-    }
-
-    public void sendBroadcastMove(PlayerName name, AllRoom room) {
-        SocketPacket p = new SocketPacket();
-        p.curr_player = name;
-        p.destination = room;
-        p.packet_type = SocketPacket.PacketType.BROADCAST;
-        p.broadcast_type = SocketPacket.BroadcastType.PLAYER_TURN;
-        p.turn_type = SocketPacket.TurnType.MOVE;
-        try {                       
-            out.writeObject(p);
-
-        } catch (IOException e) {
-            System.out.println(e);
-        }
     }
 
    public  SocketPacket sendDisproveRequest(ArrayList<String> options) {
@@ -145,69 +124,7 @@ public class Player {
             return null;
         }
     }
-
-    public void sendPlayerOut(PlayerName name) {
-        SocketPacket p = new SocketPacket();
-        p.curr_player = name;
-        p.packet_type = SocketPacket.PacketType.BROADCAST;
-        p.broadcast_type = SocketPacket.BroadcastType.PLAYER_OUT;
-        try {
-            out.writeObject(p);
-
-        } catch (IOException e) {
-            System.out.println(e);
-        }
-    }
-
-    public void sendDisproveSkip(PlayerName disprover) {
-        // player n has won
-        SocketPacket p = new SocketPacket();
-        p.curr_player = disprover;
-        p.disprove_type = SocketPacket.DisproveType.NOT_DISPROVEN;
-        p.packet_type = SocketPacket.PacketType.BROADCAST;
-        p.broadcast_type = SocketPacket.BroadcastType.DISPROVE;
-        try {
-            out.writeObject(p);
-
-        } catch (IOException e) {
-            System.out.println(e);
-        }
-    }
-
-    public void sendSuggestion(PlayerName suspect, Weapon weapon, Room room, PlayerName suggester) {
-        SocketPacket p = new SocketPacket();
-        p.curr_player = suggester;
-        p.other_player = suspect;
-        p.murder_weapon = weapon;
-        p.destination = AllRoom.valueOf(room.toString());
-        p.packet_type = SocketPacket.PacketType.BROADCAST;
-        p.broadcast_type = SocketPacket.BroadcastType.PLAYER_TURN;
-        p.turn_type = SocketPacket.TurnType.SUGGEST;
-        try {
-            out.writeObject(p);
-
-        } catch (IOException e) {
-            System.out.println(e);
-        }
-
-    }
-
-    public void sendGameOver(PlayerName name) {
-        // player n has won
-        SocketPacket p = new SocketPacket();
-        p.curr_player = name;
-        p.packet_type = SocketPacket.PacketType.BROADCAST;
-        p.broadcast_type = SocketPacket.BroadcastType.GAME_STATE;
-        p.game_state_update = SocketPacket.GameState.END;
-        try {
-            out.writeObject(p);
-
-        } catch (IOException e) {
-            System.out.println(e);
-        }
-
-    }
-
+    
     public void sendDisproveBroadcast(PlayerName disprover, PlayerName suggester, ArrayList<String> things) {
         
         SocketPacket p = new SocketPacket();

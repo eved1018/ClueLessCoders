@@ -13,33 +13,10 @@ import cluelesscoders.clueless.Clueless.*;
 
 class Packet implements Serializable  {
     // What do we need here??
-
     public Packet() {
        
     }
 
-}
-
-class TextPacket extends Packet {
-    public String text; 
-    public boolean respond;
-
-    public TextPacket(String t, Boolean resp) {
-        this.text = t;
-        this.respond = resp;
-    }
-    public TextPacket(String t) {
-        this.text = t;
-        this.respond = false;
-    }
-}
-
-class WaitingOnResponse extends Packet {
-    public String text; 
-
-    public WaitingOnResponse(String t) {
-        this.text = t;
-    }
 }
 
 
@@ -62,7 +39,7 @@ class SocketPacket extends Packet {
         REQUEST, DISPROVEN_WITH, NOT_DISPROVEN, DISPROVEN
     }
     enum BroadcastType {
-        GAME_STATE, NEW_PLAYER, PLAYER_OUT, DISPROVE, PLAYER_TURN
+        GAME_STATE, NEW_PLAYER, PLAYER_OUT, DISPROVE, TURN_MADE
     }
     
     public SocketPacket(){
@@ -75,8 +52,9 @@ class SocketPacket extends Packet {
         this.broadcast_type = null;
         this.message = new String();
         this.turn_number = 0;
-        this.cards = null;
-        this.player_locations = null;
+        this.cards = new ArrayList<String>();
+        this.player_locations = new ArrayList<String>();
+        this.crime_scene = null;
         this.game_state_update = null;
         this.murder_weapon = null;
         this.valid_rooms = null;
@@ -99,7 +77,8 @@ class SocketPacket extends Packet {
 
     public int turn_number;
     public ArrayList<String> cards;  // TODO use an enum for cards (person/weapon)
-    public ArrayList<AllRoom> player_locations; //TODO: change type to match board
+    public ArrayList<String> player_locations; //TODO: change type to match board
+    public Room crime_scene;
     public GameState game_state_update;
     public Weapon murder_weapon;
 
