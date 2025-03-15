@@ -43,44 +43,6 @@ public class Server {
     private static final String ESC_SEQ= "X";
     
     /**
-     * checkConnections : Thread object that does looping checks for client
-     * connections.
-     */
-    private Thread checkConnections = new Thread(){
-        
-        @Override
-        public void run(){
-            while (currPlayerCt.get() < MAX_PLAYERS){
-
-                try{       
-                    Socket playerSocket =  clServer.accept();                        
-                    
-                    pin = new ObjectInputStream(playerSocket.getInputStream());
-                    pout = new ObjectOutputStream(playerSocket.getOutputStream());
-                    
-                    int player_num = currPlayerCt.getAndIncrement();
-
-                    Player new_player = new Player(playerSocket, pin, pout, player_num);
-                    playerList.add(new_player);
-                    broadcastNewPlayer(new_player.name);
-
-                }
-                catch(SocketException e){
-                    if(clServer.isClosed()){
-                        System.out.println("Server Down");
-                        break;
-                    }                
-                }
-                catch(IOException e){
-                    System.out.println(e);
-                    break;
-                }
-            
-            }
-        }
-    };
-    
-    /**
      * Constructor.
      */
     public Server(){
@@ -122,27 +84,32 @@ public class Server {
 
             Player new_player = new Player(playerSocket, pin, pout, player_num);
             playerList.add(new_player);
-            // game.broadcastNewPlayer(new_player.name);
+            game.player_list = playerList;
+            game.broadcastNewPlayer(new_player.name);
         }
     }
 
     public void chat_room() {
-        while (true) {
+        boolean chatting = true;
+        while (chatting) {
             for (Player p: this.playerList){ 
                 SocketPacket m = p.sendTextRequest("Respond With Message to broadcast: ");
                 System.out.println("Player " + p.name + " Sent: " + m.message);
-                for (Player l: this.playerList){
-                    if (l.equals(p)) {
+                for (Player k: this.playerList){
+                    if (k.equals(p)) {
                         continue;
                     }
-                    l.broadcastMessage("Player " + p.name + " Sent: " + m.message, p);
+                    k.broadcastMessage("Player " + p.name + " Sent: " + m.message, p);
                 }
-                
+                if(m.message.toLowerCase().equals("start")){
+                        chatting = false;
+                        break;
+                }                
+                                
             }
             
         }
     }
-
     
     /**
      * start() starts the server for clueless and checks for server
@@ -165,16 +132,15 @@ public class Server {
             System.out.println("All players connected - Starting game");
             chat_room();
         
-            // game.start_game(playerList);
-            // while (run_game) {
-            //     run_game = game.game_loop(); 
-            // }
+            game.start_game(playerList);
+            while (run_game) {
+                run_game = game.game_loop(); 
+            }
 
             System.out.println(runServer);
 
         
             if(input.nextLine().equals(ESC_SEQ)){
-                // checkConnections.interrupt();
                 clServer.close();
                 break;
             }

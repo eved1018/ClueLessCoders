@@ -1,12 +1,10 @@
 package cluelesscoders.clueless;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -96,6 +94,7 @@ public class Game {
                 }
             }
         }
+        broadcastGameStart();
     }
     public void suggestionLoop(SocketPacket sgt, Player p ) {
 
@@ -111,13 +110,13 @@ public class Game {
         
         // can prob combine these
         broadcastMove(sgt.other_player, p.currRoom); // this should handle updating the suspects position on the UI
-        suggestBroadcast(sgt.other_player, sgt.murder_weapon, p.currRoom, p.name); // Notify all players of suggestion (ie a ui thing)
+        suggestBroadcast(sgt.other_player, sgt.murder_weapon, toRoom(p.currRoom), p.name); // Notify all players of suggestion (ie a ui thing)
 
         // ring buffer
         int size = this.player_list.size();
         int start = p.player_number;
         Player op;
-        String disprove_with;
+        ArrayList<String> disprove_with;
         for (int i = 0; i < size; i++){
             int index = (start + 1 + i ) % size; // wrap list 
             op = this.player_list.get(index);
@@ -133,17 +132,18 @@ public class Game {
                 .filter(suspecthand::contains)
                 .collect(Collectors.toSet());
 
-            if (overlap.size() > 0){
+            if (!overlap.isEmpty()){
 
                 if (overlap.size() == 1) {
-                    disprove_with = overlap.stream().findFirst().orElse(null);
+                    ArrayList<String> oneCard = new ArrayList<String>();
+                    oneCard.add(overlap.stream().findFirst().orElse(null));
+                    disprove_with = oneCard;
     
                 } else {
-                    DisproveResponse dr = op.sendDisproveRequest(suspecthand);
-                    disprove_with = dr.disprove_with;
-                }                
-                p.sendSuggestResponse(op.name, disprove_with);
-                broadcastDisprove(op.name, p.name);
+                    SocketPacket dr = op.sendDisproveRequest(suspecthand);
+                    disprove_with = dr.cards;
+                }
+                broadcastDisprove(op.name, p.name, disprove_with);
             }
 
             else {
@@ -153,8 +153,6 @@ public class Game {
     }
 
     public boolean game_loop(){
-
-        broadcastGameStart();
 
         for (Player p: this.player_list){
 
@@ -167,36 +165,44 @@ public class Game {
             ArrayList<AllRoom> moves =  this.possible_moves(p.name);
 
             Boolean can_suggest = true;
+            Boolean can_accuse = false;
             // check if player can suggest: player cant move + wasnt moved by suggestion
-            if (moves.size() == 0 && !p.moved_by_suggest) {
+            if (moves.isEmpty() && !p.moved_by_suggest) {
                 // player can only accuse 
                 can_suggest = false;
             }
+            
+            if(isARoom(p.currRoom)){
+                can_accuse = true;
+            }
 
             // request a turn from this player 
-            SocketPacket rpkt = p.playerTurnRequest(can_suggest, moves);
+            SocketPacket rpkt = p.playerTurnRequest(moves,can_suggest, can_accuse);
 
-            if (rpkt.turn_type == SocketPacket.TurnType.MOVE){
-                // update board 
-                AllRoom destination = rpkt.player_locations.get(0); 
-                p.currRoom = destination;
-                this.update_board(p.name, destination);
-                broadcastMove(p.name, destination); // Update all players UI
-
-
-            } else if (rpkt ==  SocketPacket.TurnType.SUGGEST) {
-                suggestionLoop(rpkt, p);
-            } else if (rpkt == SocketPacket.TurnType.ACCUSE) {
-                Weapon w = rpkt.cards.get(0) //FIX 
-                if (this.check_accusation(w, rpkt.other_player, p.currRoom)){
-                    // game over 
-                    System.out.println("Game over " + p.name + " won");
-                    broadcastGameOver(p.name);
-                    return false;
-                } else {
-                    p.is_out = true;
-                    broadcastPlayerOut(p.name);
-                }
+            if (null != rpkt.turn_type) switch (rpkt.turn_type) {
+                case MOVE:
+                    // update board
+                    AllRoom destination = rpkt.destination;
+                    p.currRoom = destination;
+                    this.update_board(p.name, destination);
+                    broadcastMove(p.name, destination); // Update all players UI
+                    break;
+                case SUGGEST:
+                    suggestionLoop(rpkt, p);
+                    break;
+                case ACCUSE:
+                    Weapon w = Weapon.valueOf(rpkt.cards.get(0));
+                    if (this.check_accusation(w, rpkt.other_player, toRoom(p.currRoom))){
+                        // game over
+                        System.out.println("Game over " + p.name + " won");
+                        broadcastGameOver(p.name);
+                        return false;
+                    } else {
+                        p.is_out = true;
+                        broadcastPlayerOut(p.name);
+                    }   break;
+                default:
+                    break;
             }
 
         }
@@ -233,6 +239,19 @@ public class Game {
 	public Room get_starting_room(PlayerName name) {
 		return Room.Study;
 	}
+        
+    public boolean isARoom(AllRoom room){
+        for(Enum value : Room.values() ){
+            if(value.equals(room)){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    Room toRoom(AllRoom room){
+        return Room.valueOf(room.toString());
+    }
 
     public void broadcastNewPlayer(PlayerName n){
         for (Player p : this.player_list){
@@ -241,12 +260,8 @@ public class Game {
     }
 
     public void broadcastGameStart(){
-        int i = 0;
         for (Player p : this.player_list){
-            Room start_room = this.get_starting_room(p.name);
-            ArrayList<String> player_hand = this.get_hand(p.name);
-            p.sendGameStart(player_hand, start_room, i);
-            i+=1;
+            p.sendGameStart();
         }        
 
     }
@@ -266,7 +281,7 @@ public class Game {
         }
     }
 
-    public void broadcastMove(PlayerName name, Room room) {
+    public void broadcastMove(PlayerName name, AllRoom room) {
         // player has moved to room by player 
 
         for (Player p : this.player_list){
@@ -274,11 +289,10 @@ public class Game {
         }
     }
 
-    public void broadcastDisprove(PlayerName disprover, PlayerName suggester){
+    public void broadcastDisprove(PlayerName disprover, PlayerName suggester, ArrayList<String> things){
         for (Player p : this.player_list){
-            p.sendDisproveBroadcast(disprover, suggester);
+            p.sendDisproveBroadcast(disprover, suggester, things);
         }
-
     }
 
     public void broadcastGameOver(PlayerName name){

@@ -6,6 +6,7 @@ import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.ArrayList;
 import cluelesscoders.clueless.Packet;
 import cluelesscoders.clueless.Player;
 
@@ -39,96 +40,138 @@ public class Client {
         return true;
     }
 
-    public Boolean handlePacketRcv(Packet pkt, Scanner input, ObjectOutputStream out) {
+    public Boolean handlePacketRcv(SocketPacket pkt, Scanner input, ObjectOutputStream out) {
         try {
-            if (pkt instanceof TextPacket) {
-                TextPacket tp = (TextPacket) pkt;
-                System.out.println("Server: " + tp.text);
-
-                if (tp.respond) {
-                    System.out.print("Respond: ");
+            switch(pkt.packet_type){
+                case MESSAGE:
+                    
+                    System.out.println(pkt.message);
+                    if (pkt.expect_response) {
+                        String line = null;
+                        if (input.hasNextLine()) {
+                            line = input.nextLine();
+                        }
+                        SocketPacket r = new SocketPacket();
+                        r.message = line;
+                        r.packet_type = SocketPacket.PacketType.MESSAGE; 
+                        out.writeObject(r);
+                    }
+                    break;
+                    
+                case BROADCAST:
+                    switch(pkt.broadcast_type){
+                        case NEW_PLAYER:
+                            System.out.println("Print new player " + pkt.curr_player);
+                            break;
+                        case GAME_STATE:
+                            switch(pkt.game_state_update){
+                                case START:
+                                    System.out.println("Game Starting");
+                                    break;
+                                case END:
+                                    System.out.println(pkt.curr_player + " has won the game");
+                                    break;
+                                default:
+                                    System.out.println("Cant decode gamee state broadcast packet");
+                            }
+                        break;    
+                        case PLAYER_TURN:
+                            switch(pkt.turn_type){
+                                case MOVE:
+                                    System.out.println("Player " + pkt.curr_player + " moved to " + pkt.destination);
+                                    break;
+                                case SUGGEST:
+                                    System.out.println("Player " + pkt.curr_player + " Suggests the murder was done by " + pkt.other_player
+                                    + " in the " + pkt.destination + " with the " + pkt.murder_weapon);
+                                    break;
+                                default:
+                                    System.out.println("Cant decode player turn broadcast packet");
+                                    break;
+                            }
+                        break;
+                        case DISPROVE:
+                            switch(pkt.disprove_type){
+                                case DISPROVEN_WITH:
+                                    System.out.println("Suggestion was disproved by " + pkt.curr_player + " with " + pkt.cards);
+                                    break;
+                                case DISPROVEN:
+                                    System.out.println("Suggestion was disproved by " + pkt.curr_player);
+                                    break;
+                                case NOT_DISPROVEN:
+                                     System.out.println(pkt.curr_player + " could not disprove the suggestion");
+                                     break;
+                                default:
+                                    System.out.println("Cant decode disprove broadcast packet");
+                                    break;
+                            }
+                            break;
+                        case PLAYER_OUT:
+                            System.out.println("Player " + pkt.curr_player + " is out of the game.");
+                            break;
+                        default:
+                            System.out.println("Cant decode broadcast packet");
+                            break;
+                    }
+                    break;
+                case TURN:
+                    System.out.println("Server: Its your turn. Pick one of [M]ove [S]uggest [A]ccuse");
+                    // prompt for turn
                     String line = null;
                     if (input.hasNextLine()) {
                         line = input.nextLine();
                     }
-                    TextPacket tps = new TextPacket(line);
-                    out.writeObject(tps);
 
-                }
+                    if (line.toLowerCase().equals("m")) {
+                        System.out.println("Enter a room to move to: " + pkt.valid_rooms);
+                        String line2 = null;
+                        if (input.hasNextLine()) {
+                            line2 = input.nextLine();
+                        }
+                        // TODO check that line is a valid room:
 
-            }
-
-            else if (pkt instanceof TurnRequest) {
-                TurnRequest tp = (TurnRequest) pkt;
-
-                // tp will have some info about what turn types the player can make
-                System.out.println("Server: Its your turn. Pick one of [M]ove [S]uggest [A]ccuse");
-                // prompt for turn
-                String line = null;
-                if (input.hasNextLine()) {
-                    line = input.nextLine();
-                }
-
-                if (line.toLowerCase().equals("m")) {
-                    System.out.println("Enter a room to move too: " + tp.valid_moves);
-                    String line2 = null;
-                    if (input.hasNextLine()) {
-                        line2 = input.nextLine();
+                        AllRoom room = AllRoom.valueOf(line2);
+                        SocketPacket o = new SocketPacket();
+                        o.curr_player = pkt.curr_player;
+                        o.destination = room;
+                        o.turn_type = SocketPacket.TurnType.MOVE;
+                        o.packet_type = SocketPacket.PacketType.TURN;
+                        out.writeObject(o);
                     }
-                    // TODO check that line is a valid room:
-
-                    Room room = Room.valueOf(line2);
-                    PlayerMove pm = new PlayerMove(room);
-                    out.writeObject(pm);
-                }
-
-            } else if (pkt instanceof NewPlayerbroadcast) {
-                NewPlayerbroadcast npb = (NewPlayerbroadcast) pkt;
-                System.out.println("Print new player " + npb.name);
-
-            } else if (pkt instanceof GameStartBroadcast) {
-                // GameStartBroadcast gsb = (GameStartBroadcast) pkt;
-                System.out.println("Game Starting");
-
-            } else if (pkt instanceof BroadcastMove) {
-                BroadcastMove bm = (BroadcastMove) pkt;
-                System.out.println("Player " + bm.name + " moved to " + bm.new_room);
-
-            } else if (pkt instanceof DisproveRequest) {
-                DisproveRequest dr = (DisproveRequest) pkt;
-                System.out.println("Disprove with " + dr.options);
-                String disprove_with = null;
-                if (input.hasNextLine()) {
-                    disprove_with = input.nextLine();
-                }
-                // to any error handeling here
-                DisproveResponse disproveResponse = new DisproveResponse(disprove_with);
-                out.writeObject(disproveResponse);
-
-            } else if (pkt instanceof SuggestionResponse) {
-                SuggestionResponse sr = (SuggestionResponse) pkt;
-                System.out.println("Suggestion was disproved by " + sr.disprover + " with " + sr.disproved_with);
-            } else if (pkt instanceof BroadcastPlayerOut) {
-                BroadcastPlayerOut bpo = (BroadcastPlayerOut) pkt;
-                System.out.println("Player " + bpo.player);
-            } else if (pkt instanceof DisproveSkip) {
-                DisproveSkip dsk = (DisproveSkip) pkt;
-                System.out.println("Player " + dsk.player + " could not disprove suggestion");
-            } else if (pkt instanceof SuggestBroadcast) {
-                SuggestBroadcast sgb = (SuggestBroadcast) pkt;
-                System.out.println("Player " + sgb.suggester + " Suggests the murder was done by " + sgb.suspect
-                        + " in the " + sgb.room + " with the " + sgb.weapon);
-
-            } else if (pkt instanceof BroadcastGameOver) {
-                BroadcastGameOver bgo = (BroadcastGameOver) pkt;
-                System.out.println(bgo.winner + " has won the game");
-            } else if (pkt instanceof DisproveBroadcast) {
-                DisproveBroadcast dbc = (DisproveBroadcast) pkt;
-                System.out.println("Player " + dbc.disprover + " disproved the suggestion");
-            } else {
-
-                System.out.println("Cant decode packet");
-
+                    break;
+                case DISPROVE:
+                    switch(pkt.disprove_type){
+                        case REQUEST:
+                            System.out.println("Disprove with " + pkt.cards);
+                            boolean append = true;
+                            ArrayList<String> dis = new ArrayList<String>();
+                            String disprove_with;
+                            while(append){
+                                System.out.println("Current send list is  " + dis + ". Add a card? No to quit.");
+                                if (input.hasNextLine()) {
+                                    disprove_with = input.nextLine();
+                                    if(pkt.cards.contains(disprove_with)){
+                                        dis.add(disprove_with);
+                                    }
+                                                                        
+                                    if(disprove_with.toLowerCase().equals("no") || dis.size() == pkt.MAX_CARDS_TO_SEND){
+                                        SocketPacket o = new SocketPacket();
+                                        o.curr_player = pkt.curr_player;
+                                        o.cards = dis;
+                                        out.writeObject(o);
+                                    }
+                                    else{
+                                        System.out.println(disprove_with + " is not in your current hand.");
+                                    }
+                                }
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                default:
+                    System.out.println("Cant decode packet");
+                    break;
             }
         } catch (IOException e) {
             System.out.println(e);
@@ -165,32 +208,25 @@ public class Client {
         SocketPacket p;
         Boolean run = true;
         String line = null;
+        
         try {
             // initial respponse from sever
-            // p = (Packet) cin.readObject();
-            // run = handlePacketRcv(p, input, cout);
-
-            while (run) {
-
+            //p = (SocketPacket) cin.readObject();
+            //run = handlePacketRcv(p, input, cout);
+            while (run) {           
+                Object o = cin.readObject();
                 // // wait until server asks for something or tell us to update UI:
-                p = (SocketPacket) cin.readObject();
-                System.out.println(p.message);
-                if (p.expect_response) {
-
-                    // run = handlePacketRcv(p, input, cout);
-                    if (input.hasNextLine()) {
-                        line = input.nextLine();
-                    }
-                    SocketPacket r = new SocketPacket();
-                    r.message = line;
-                    r.packet_type = SocketPacket.PacketType.MESSAGE; 
-                    cout.writeObject(r);
+                if(o != null){
+                    p = (SocketPacket) o;
+                    run = handlePacketRcv(p, input, cout);
                 }
-                }
+            }
 
-        } catch (ClassNotFoundException ex) {
-            System.err.println("Error");
+        } catch (ClassNotFoundException  | IOException ex) {
+            System.err.println("Error: " + ex.getMessage());
         }
+        
+        
 
         System.out.println("Closing connection");
         input.close();
