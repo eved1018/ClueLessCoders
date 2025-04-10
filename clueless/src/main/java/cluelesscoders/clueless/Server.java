@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 
 
 
-
 public class Server {
     
     private ServerSocket clServer;
@@ -130,7 +129,7 @@ public class Server {
             System.out.println(currPlayerCt);
             waiting_room();
             System.out.println("All players connected - Starting game");
-            chat_room();
+            // chat_room();
         
             game.start_game(playerList);
             while (run_game) {

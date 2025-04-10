@@ -5,9 +5,7 @@
 
 package cluelesscoders.clueless;
 import java.io.Serializable;
-import java.lang.reflect.Array;
 import java.util.ArrayList;
-import java.util.Arrays;
 import cluelesscoders.clueless.Clueless.*;
 
 
@@ -32,7 +30,7 @@ class SocketPacket extends Packet {
     }
     
     enum TurnType {
-        TURN_REQUEST, MOVE, SUGGEST, ACCUSE
+        TURN_REQUEST, MOVE, SUGGEST, ACCUSE, END
     }
     
     enum DisproveType {
@@ -52,8 +50,8 @@ class SocketPacket extends Packet {
         this.broadcast_type = null;
         this.message = new String();
         this.turn_number = 0;
-        this.cards = new ArrayList<String>();
-        this.player_locations = new ArrayList<String>();
+        this.cards = new ArrayList<Card>();
+        this.player_locations = new ArrayList<AllRoom>();
         this.crime_scene = null;
         this.game_state_update = null;
         this.murder_weapon = null;
@@ -76,8 +74,8 @@ class SocketPacket extends Packet {
     public String message;
 
     public int turn_number;
-    public ArrayList<String> cards;  // TODO use an enum for cards (person/weapon)
-    public ArrayList<String> player_locations; //TODO: change type to match board
+    public ArrayList<Card> cards;  // TODO use an enum for cards (person/weapon)
+    public ArrayList<AllRoom> player_locations;
     public Room crime_scene;
     public GameState game_state_update;
     public Weapon murder_weapon;

@@ -6,6 +6,8 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 
+import cluelesscoders.clueless.SocketPacket.GameState;
+
 public class Player {
     ArrayList<String> hand;
     AllRoom currRoom;
@@ -64,7 +66,7 @@ public class Player {
         } 
     }
 
-    public SocketPacket playerTurnRequest(ArrayList<AllRoom> valid_rooms, Boolean can_suggest, Boolean can_accuse){
+    public SocketPacket playerTurnRequest(ArrayList<AllRoom> valid_rooms, Boolean can_suggest, Boolean can_accuse, AllRoom curr_room){
         SocketPacket p = new SocketPacket();
         p.curr_player = this.name;
         p.packet_type = SocketPacket.PacketType.TURN;
@@ -73,6 +75,7 @@ public class Player {
         p.can_accuse = can_accuse;
         p.can_suggest = can_suggest;
         p.expect_response = true;
+        p.destination = curr_room;
 
         
         try {
@@ -95,12 +98,15 @@ public class Player {
         } 
     }
 
-    public void sendGameStart(ArrayList<String>player_hand, AllRoom start_room, int player_number){
+    public void sendGameStart(ArrayList<Card>player_hand, AllRoom start_room, int player_number){
         SocketPacket p = new SocketPacket();
         p.packet_type = SocketPacket.PacketType.BROADCAST;
-        p.broadcast_type = SocketPacket.BroadcastType.NEW_PLAYER;
-        p.player_locations.add(start_room.toString());
+        p.broadcast_type = SocketPacket.BroadcastType.GAME_STATE;
+        p.game_state_update = SocketPacket.GameState.START;
+        // p.player_locations.add(start_room);
         p.turn_number = player_number;
+        p.destination = start_room;
+        p.cards = player_hand;
         try {
             out.writeObject(p);
         } catch (IOException e) {
@@ -109,7 +115,7 @@ public class Player {
 
     }
 
-   public  SocketPacket sendDisproveRequest(ArrayList<String> options) {
+   public Card sendDisproveRequest(ArrayList<Card> options) {
         SocketPacket p = new SocketPacket();
         p.curr_player = name;
         p.cards = options;
@@ -118,21 +124,23 @@ public class Player {
         try {
             out.writeObject(p);
             SocketPacket rcv = ( SocketPacket) in.readObject();
-            return rcv;
+            return rcv.cards.get(0);
         } catch (IOException | ClassNotFoundException e) {
             System.out.println(e);
             return null;
         }
     }
     
-    public void sendDisproveBroadcast(PlayerName disprover, PlayerName suggester, ArrayList<String> things) {
+    // TODO this is wrong disporve bcast should be just who disporved whom
+    public void sendDisproveBroadcast(PlayerName disprover, PlayerName suggester, Card things) {
         
         SocketPacket p = new SocketPacket();
         p.curr_player = disprover;
         p.other_player = suggester;
-        p.cards = things;
         if(p.other_player == this.name){
             p.disprove_type = SocketPacket.DisproveType.DISPROVEN_WITH;
+            p.cards = new ArrayList<Card>();
+            p.cards.add(things);
         }
         else{
             p.disprove_type = SocketPacket.DisproveType.DISPROVEN;
