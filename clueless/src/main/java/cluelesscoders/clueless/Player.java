@@ -98,7 +98,7 @@ public class Player {
         } 
     }
 
-    public void sendGameStart(ArrayList<Card>player_hand, AllRoom start_room, int player_number){
+    public void sendGameStart(ArrayList<Card>player_hand, AllRoom start_room, int player_number, ArrayList<String> Playerlist){
         SocketPacket p = new SocketPacket();
         p.packet_type = SocketPacket.PacketType.BROADCAST;
         p.broadcast_type = SocketPacket.BroadcastType.GAME_STATE;
@@ -107,6 +107,8 @@ public class Player {
         p.turn_number = player_number;
         p.destination = start_room;
         p.cards = player_hand;
+        p.curr_player = name;
+        p.player_list = Playerlist;
         try {
             out.writeObject(p);
         } catch (IOException e) {

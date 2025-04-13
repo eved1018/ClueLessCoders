@@ -4,9 +4,7 @@
 
 package cluelesscoders.clueless;
 import java.io.IOException;
-import java.io.Serializable;
-import java.net.Socket;
-import java.util.ArrayList;
+
 /** To run, in command line use java Clueless c for client side
  *                              java Clueless s for server side
  *  Type ESC_SEQ in command line to terminate both programs

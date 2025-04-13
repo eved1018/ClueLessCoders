@@ -2,6 +2,7 @@ package cluelesscoders.clueless;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.logging.Logger;
 
@@ -45,7 +46,7 @@ public class Game {
     private static final Logger LOGGER = Logger.getLogger(Game.class.getName());
 
     ArrayList<Player> player_list;
-    private GameBoard board;
+    private final GameBoard board;
     private DeckHelper deckHelper;
     private HashMap<PlayerName, ArrayList<Card>> hands;
 
@@ -57,13 +58,12 @@ public class Game {
 
     public void start_game(ArrayList<Player> player_list) {
         this.player_list = player_list;
-        LOGGER.info("Starting game with players: " + player_list);
+        LOGGER.log(Level.INFO, "Starting game with players: {0}", player_list);
 
         // Set secret cards
         deckHelper.setSecretCards();
         LOGGER.info("Secret cards set.");
-        LOGGER.info("Secret cards are: " + deckHelper.getSecretPerson().toString() + " | "
-                + deckHelper.getSecretRoom().toString() + " | " + deckHelper.getSecretWeapon().toString());
+        LOGGER.log(Level.INFO, "Secret cards are: {0} | {1} | {2}", new Object[]{deckHelper.getSecretPerson().toString(), deckHelper.getSecretRoom().toString(), deckHelper.getSecretWeapon().toString()});
 
         // Distribute cards to players
         this.hands = deckHelper.distributeCards(player_list);
@@ -74,7 +74,7 @@ public class Game {
             AllRoom startingRoom = this.get_starting_room(p.name);
             p.currRoom = startingRoom;
             this.board.updatePlayerLocation(p.name, startingRoom);
-            LOGGER.info("Player " + p.name + " placed in starting room: " + startingRoom);
+            LOGGER.log(Level.INFO, "Player {0} placed in starting room: {1}", new Object[]{p.name, startingRoom});
         }
 
         broadcastGameStart();
@@ -84,7 +84,7 @@ public class Game {
         boolean result = w.toString().equals(deckHelper.getSecretWeapon().getName()) &&
                 n.toString().equals(deckHelper.getSecretPerson().getName()) &&
                 r.toString().equals(deckHelper.getSecretRoom().getName());
-        LOGGER.info("Accusation checked: Weapon=" + w + ", Player=" + n + ", Room=" + r + " -> Result: " + result);
+        LOGGER.log(Level.INFO, "Accusation checked: Weapon={0}, Player={1}, Room={2} -> Result: {3}", new Object[]{w, n, r, result});
         return result;
     }
 
@@ -104,7 +104,7 @@ public class Game {
             case Professor_Plum:
                 return AllRoom.Study2Library;
             default:
-                LOGGER.warning("No starting room found for player: " + name);
+                LOGGER.log(Level.WARNING, "No starting room found for player: {0}", name);
                 return null; // Default starting room
         }
     }
@@ -112,18 +112,23 @@ public class Game {
     public void broadcastGameStart() {
         LOGGER.info("Broadcasting game start.");
         int i = 0;
+        
+        ArrayList<String> player_names = new ArrayList<String>();
+        for (Player pl : this.player_list) {
+            player_names.add(pl.name.toString());
+        }
+        
         for (Player p : this.player_list) {
             AllRoom start_room = this.get_starting_room(p.name);
             ArrayList<Card> player_hand = (ArrayList<Card>) this.hands.get(p.name);
-            p.sendGameStart(player_hand, start_room, i);
+            p.sendGameStart(player_hand, start_room, i, player_names);
             i += 1;
-            LOGGER.info("Player " + p.name + " notified of game start. Starting room: " + start_room);
+            LOGGER.log(Level.INFO, "Player {0} notified of game start. Starting room: {1}", new Object[]{p.name, start_room});
         }
     }
 
     public void suggestionLoop(SocketPacket sgt, Player p) {
-        LOGGER.info("Suggestion made by player " + p.name + ": Suspect=" + sgt.other_player + ", Weapon="
-                + sgt.murder_weapon + ", Room=" + p.currRoom);
+        LOGGER.log(Level.INFO, "Suggestion made by player {0}: Suspect={1}, Weapon={2}, Room={3}", new Object[]{p.name, sgt.other_player, sgt.murder_weapon, p.currRoom});
 
         // move suggested player to room
 
@@ -160,12 +165,12 @@ public class Game {
             if (disprove_with.isEmpty()) {
 
                 broadcastDisproveSkip(op.name, p.name); // player x cant disprove
-                LOGGER.info("Player " + op.name + " could not disprove the suggestion.");
+                LOGGER.log(Level.INFO, "Player {0} could not disprove the suggestion.", op.name);
             } else {
 
                 Card disprove_with_repsonse = op.sendDisproveRequest(disprove_with);
                 broadcastDisprove(op.name, p.name, disprove_with_repsonse);
-                LOGGER.info("Player " + op.name + " disproved the suggestion with: " + disprove_with_repsonse);
+                LOGGER.log(Level.INFO, "Player {0} disproved the suggestion with: {1}", new Object[]{op.name, disprove_with_repsonse});
                 return;
             }
         }
@@ -177,11 +182,12 @@ public class Game {
 
             if (p.is_out) {
                 // TODO not sure what the rules are for for out player
-                LOGGER.info("Skipping player " + p.name + " (out of the game).");
+                LOGGER.log(Level.INFO, "Skipping player {0} (out of the game).", p.name);
                 continue;
             }
             boolean is_player_turn = true;
             boolean can_move = true;
+            int turnsTaken = 0;
             while (is_player_turn) {
                 // check if the player can move ie are the hallways blocked
                 ArrayList<AllRoom> moves = new ArrayList<AllRoom>();
@@ -204,14 +210,24 @@ public class Game {
                 // player making a suggestion, you can not make a suggestion (but you can make
                 // an
                 // accusation).
-                if (moves.isEmpty() && p.moved_by_suggest) {
+                if (moves.isEmpty() && p.moved_by_suggest && turnsTaken == 0) {
                     // player can only accuse
                     can_suggest = false;
                 }
+                
+                if(onePlayerLeft(p)){
+                    LOGGER.log(Level.INFO, "Player {0} is the only player left and has won the game.", p.name);
+                            broadcastGameOver(p.name);
+                            return false;
+                }
 
                 // request a turn from this player
+                turnBroadcast(p.name);
                 SocketPacket rpkt = p.playerTurnRequest(moves, can_suggest, can_accuse, p.currRoom);
-                LOGGER.info("Player " + p.name + " turn: " + rpkt.turn_type);
+                
+                LOGGER.log(Level.INFO, "Player {0} turn: {1}", new Object[]{p.name, rpkt.turn_type});
+                
+                
 
                 switch (rpkt.turn_type) {
                     case MOVE:
@@ -220,7 +236,7 @@ public class Game {
                         p.currRoom = destination;
                         this.board.updatePlayerLocation(p.name, destination);
                         broadcastMove(p.name, destination); // Update all players UI
-                        LOGGER.info("Player " + p.name + " moved to: " + destination);
+                        LOGGER.log(Level.INFO, "Player {0} moved to: {1}", new Object[]{p.name, destination});
                         can_move = false;
                         break;
                     case SUGGEST:
@@ -231,14 +247,14 @@ public class Game {
                         is_player_turn = false;
                         if (this.check_accusation(rpkt.murder_weapon, rpkt.other_player, rpkt.crime_scene)) {
                             // game over
-                            LOGGER.info("Player " + p.name + " made a correct accusation and won the game.");
+                            LOGGER.log(Level.INFO, "Player {0} made a correct accusation and won the game.", p.name);
                             broadcastGameOver(p.name);
                             return false;
                         } else {
                             // Incorrect accusation: mark player as out
                             p.is_out = true;
                             broadcastPlayerOut(p.name);
-                            LOGGER.info("Player " + p.name + " made an incorrect accusation and is out of the game.");
+                            LOGGER.log(Level.INFO, "Player {0} made an incorrect accusation and is out of the game.", p.name);
 
                             // Check if the player is blocking a door and move them into the room
                             if (!isARoom(p.currRoom)) {
@@ -254,18 +270,33 @@ public class Game {
                         }
                         break;
                     case END:
-                        LOGGER.info("Player " + p.name + " ended their turn.");
+                        LOGGER.log(Level.INFO, "Player {0} ended their turn.", p.name);
                         is_player_turn = false;
                         break;
 
                     default:
                         break;
                 }
+                // Increment turn count
+                turnsTaken++;
+                p.moved_by_suggest = false;
             }
         }
 
         return true;
     }
+    
+    
+    public boolean onePlayerLeft(Player currPlayer){
+        boolean onlyPlayer = true;
+        for (Player p : this.player_list) {
+            if(!p.name.equals(currPlayer.name) && !p.is_out){
+                onlyPlayer = false;
+            }
+        }
+        return onlyPlayer;
+    }
+    
 
     public boolean is_suggestable_room(String r) {
         // check if room is a room u can suggest in
@@ -343,6 +374,17 @@ public class Game {
         p.murder_weapon = weapon;
         p.curr_player = suggester;
         // suggester made suggestion
+        for (Player player : this.player_list) {
+            player.sendPacket(p);
+        }
+    }
+    
+    public void turnBroadcast(PlayerName name){
+        SocketPacket p = new SocketPacket();
+        p.broadcast_type = SocketPacket.BroadcastType.GAME_STATE;
+        p.packet_type = SocketPacket.PacketType.BROADCAST;
+        p.game_state_update = SocketPacket.GameState.TURN;
+        p.curr_player = name;
         for (Player player : this.player_list) {
             player.sendPacket(p);
         }

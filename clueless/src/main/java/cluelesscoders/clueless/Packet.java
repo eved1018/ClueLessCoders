@@ -26,7 +26,7 @@ class SocketPacket extends Packet {
         LOBBY, TURN, BROADCAST, DISPROVE,  MESSAGE,
     }
     enum GameState {
-        START, END
+        START, END, TURN
     }
     
     enum TurnType {
@@ -81,6 +81,7 @@ class SocketPacket extends Packet {
     public Weapon murder_weapon;
 
     public ArrayList<AllRoom> valid_rooms; //TODO use an enum for all rooms
+    public ArrayList<String> player_list;
     public AllRoom destination;
     public Boolean can_suggest;
     public Boolean can_accuse;

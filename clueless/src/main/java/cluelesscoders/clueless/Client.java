@@ -31,6 +31,7 @@ public class Client {
      * Character to close Thread..
      */
     private static final String ESC_SEQ = "X";
+    private CCUI clientUI;
 
     public Boolean readInput(Scanner input, String line) {
         if (input.hasNextLine()) {
@@ -47,7 +48,7 @@ public class Client {
             switch (pkt.packet_type) {
                 case MESSAGE:
 
-                    System.out.println(pkt.message);
+                    clientUI.printlnUI(pkt.message);
                     if (pkt.expect_response) {
                         String line = null;
                         if (input.hasNextLine()) {
@@ -63,168 +64,158 @@ public class Client {
                 case BROADCAST:
                     switch (pkt.broadcast_type) {
                         case NEW_PLAYER:
-                            System.out.println("Print new player " + pkt.curr_player);
-                            System.out.println("Waiting for more players");
+                            clientUI.printlnUI("New player joined: " + pkt.curr_player);
+                            clientUI.printlnUI("Waiting for more players");
+                            
                             break;
                         case GAME_STATE:
                             switch (pkt.game_state_update) {
                                 case START:
-                                    System.out.println("Game Starting");
-                                    System.out.println("Your starting position is: " + pkt.destination);
-                                    System.out.println("Your hand contains the following cards:");
-                                    for (Card card : pkt.cards) {
-                                        System.out.println("- " + card.getName());
+                                    clientUI.printlnUI("Game Starting");
+                                    clientUI.setCharacter(pkt.curr_player.name());
+                                    for(String p : pkt.player_list){
+                                        clientUI.addPlayer(p);
                                     }
+                                    clientUI.printlnUI("Your starting position is: " + pkt.destination);
+                                    clientUI.updatePosition(pkt.destination.name());
+                                    clientUI.printlnUI("Your hand contains the following cards:");
+                                    for (Card card : pkt.cards) {
+                                        clientUI.printlnUI("- " + card.getName());
+                                    }
+                                    clientUI.addCards(pkt.cards);
+                                    break;
+                                case TURN:
+                                    clientUI.printlnUI("It's " + pkt.curr_player + "'s turn.");
+                                    clientUI.updateTurn(pkt.curr_player.name());
                                     break;
                                 case END:
-                                    System.out.println(pkt.curr_player + " has won the game");
+                                    clientUI.printlnUI(pkt.curr_player + " has won the game");
                                     break;
                                 default:
-                                    System.out.println("Cant decode gamee state broadcast packet");
+                                    clientUI.printlnUI("Cant decode game state broadcast packet");
                             }
                             break;
                         case TURN_MADE:
                             switch (pkt.turn_type) {
                                 case MOVE:
-                                    System.out.println("Player " + pkt.curr_player + " moved to " + pkt.destination);
+                                    clientUI.printlnUI("Player " + pkt.curr_player + " moved to " + pkt.destination);
                                     break;
                                 case SUGGEST:
-                                    System.out.println("Player " + pkt.curr_player + " Suggests the murder was done by "
+                                    clientUI.printlnUI("Player " + pkt.curr_player + " Suggests the murder was done by "
                                             + pkt.other_player
                                             + " in the " + pkt.crime_scene + " with the " + pkt.murder_weapon);
                                     break;
                                 default:
-                                    System.out.println("Cant decode player turn broadcast packet");
+                                    clientUI.printlnUI("Cant decode player turn broadcast packet");
                                     break;
                             }
                             break;
                         case DISPROVE:
                             switch (pkt.disprove_type) {
                                 case DISPROVEN_WITH:
-                                    System.out.println(
+                                    clientUI.printlnUI(
                                             "Suggestion was disproved by " + pkt.curr_player + " with " + pkt.cards);
                                     break;
                                 case DISPROVEN:
-                                    System.out.println("Suggestion was disproved by " + pkt.curr_player);
+                                    clientUI.printlnUI("Suggestion was disproved by " + pkt.curr_player);
                                     break;
                                 case NOT_DISPROVEN:
-                                    System.out.println(pkt.curr_player + " could not disprove the suggestion");
+                                    clientUI.printlnUI(pkt.curr_player + " could not disprove the suggestion");
                                     break;
                                 default:
-                                    System.out.println("Cant decode disprove broadcast packet");
+                                    clientUI.printlnUI("Cant decode disprove broadcast packet");
                                     break;
                             }
                             break;
                         case PLAYER_OUT:
-                            System.out.println("Player " + pkt.curr_player + " is out of the game.");
+                            clientUI.printlnUI("Player " + pkt.curr_player + " is out of the game.");
                             break;
                         default:
-                            System.out.println("Cant decode broadcast packet");
+                            clientUI.printlnUI("Cant decode broadcast packet");
                             break;
                     }
                     break;
                 case TURN:
 
                     String prompt =  "Server: Its your turn. Pick one of ";
-                    if (pkt.valid_rooms.size() > 0) {
+                    
+                    
+                    if (!pkt.valid_rooms.isEmpty()) {
                         prompt += "[M]ove ";
+                        clientUI.toggleButton(CCUI.BUTTON_OPTION.MOVE, true);
                     }
                     if (pkt.can_suggest){
                         prompt += "[S]uggest ";
+                        clientUI.toggleButton(CCUI.BUTTON_OPTION.SUGGEST, true);
                     }
                     if (pkt.can_accuse) {
 
                         prompt += "[A]ccuse ";
+                        clientUI.toggleButton(CCUI.BUTTON_OPTION.ACCUSE, true);
                     }
                     prompt += "[E]nd Turn";
+                    clientUI.toggleButton(CCUI.BUTTON_OPTION.END_TURN, true);
                         
-                    System.out.println(prompt);
+                    clientUI.printlnUI(prompt);
                     // prompt for turn
-                    String line = null;
-                    if (input.hasNextLine()) {
-                        line = input.nextLine();
-                    }
+                    String line = clientUI.GetButtonInput();
+
 
                     if (line.toLowerCase().equals("m")) {
-                        System.out.println("Enter a room to move to: " + pkt.valid_rooms);
-                        String line2 = null;
-                        if (input.hasNextLine()) {
-                            line2 = input.nextLine();
-                        }
                         // TODO check that line is a valid room:
-
-                        AllRoom room = AllRoom.valueOf(line2);
+                        AllRoom room = clientUI.movePopup(pkt.valid_rooms);
+                        clientUI.updatePosition(room.name());
+                        
                         SocketPacket o = new SocketPacket();
                         o.curr_player = pkt.curr_player;
                         o.destination = room;
                         o.turn_type = SocketPacket.TurnType.MOVE;
                         o.packet_type = SocketPacket.PacketType.TURN;
                         out.writeObject(o);
+                        
+                        clientUI.disableAllButtons();
+                        
                     } else if (line.toLowerCase().equals("s")) {
                         // Handle suggestion
-                        System.out.println("Available players: " + getPlayerNames());
-                        System.out.println("Available weapons: " + getWeaponNames());
-
-                        System.out.println("Enter the suspect (player name): ");
-                        String suspect = null;
-                        if (input.hasNextLine()) {
-                            suspect = input.nextLine();
-                        }
-
-                        System.out.println("Enter the weapon: ");
-                        String weapon = null;
-                        if (input.hasNextLine()) {
-                            weapon = input.nextLine();
-                        }
-
+                        ArrayList<String> sPckg = clientUI.SuggestionPopup();
 
                         SocketPacket suggestPacket = new SocketPacket();
                         suggestPacket.curr_player = pkt.curr_player;
-                        suggestPacket.other_player = PlayerName.valueOf(suspect);
-                        suggestPacket.murder_weapon = Weapon.valueOf(weapon);
-                        suggestPacket.crime_scene = Room.valueOf(pkt.destination.toString());
+                        suggestPacket.other_player = PlayerName.valueOf(sPckg.get(CCUI.S_INDEX.SUSPECT.getValue()));
+                        suggestPacket.murder_weapon = Weapon.valueOf(sPckg.get(CCUI.S_INDEX.WEAPON.getValue()));
+                        suggestPacket.crime_scene = Room.valueOf(sPckg.get(CCUI.S_INDEX.LOCATION.getValue()));
                         suggestPacket.turn_type = SocketPacket.TurnType.SUGGEST;
                         suggestPacket.packet_type = SocketPacket.PacketType.TURN;
                         out.writeObject(suggestPacket);
+                        
+                        clientUI.disableAllButtons();
+                        
                     } else if (line.toLowerCase().equals("a")) {
                         // Handle accusation
-                        System.out.println("Available players: " + getPlayerNames());
-                        System.out.println("Available weapons: " + getWeaponNames());
-                        System.out.println("Available rooms: " + getRoomNames());
-                        System.out.println("Enter the suspect (player name): ");
-                        String suspect = null;
-                        if (input.hasNextLine()) {
-                            suspect = input.nextLine();
-                        }
-
-                        System.out.println("Enter the weapon: ");
-                        String weapon = null;
-                        if (input.hasNextLine()) {
-                            weapon = input.nextLine();
-                        }
-
-                        System.out.println("Enter the room: ");
-                        String room = null;
-                        if (input.hasNextLine()) {
-                            room = input.nextLine();
-                        }
+                        ArrayList<String> aPckg = clientUI.AccusationPopup();
 
                         SocketPacket accusePacket = new SocketPacket();
                         accusePacket.curr_player = pkt.curr_player;
-                        accusePacket.other_player = PlayerName.valueOf(suspect);
-                        accusePacket.murder_weapon = Weapon.valueOf(weapon);
-                        accusePacket.crime_scene = Room.valueOf(room);
+                        accusePacket.other_player = PlayerName.valueOf(aPckg.get(CCUI.S_INDEX.SUSPECT.getValue()));
+                        accusePacket.murder_weapon = Weapon.valueOf(aPckg.get(CCUI.S_INDEX.WEAPON.getValue()));
+                        accusePacket.crime_scene = Room.valueOf(aPckg.get(CCUI.S_INDEX.LOCATION.getValue()));
                         accusePacket.turn_type = SocketPacket.TurnType.ACCUSE;
                         accusePacket.packet_type = SocketPacket.PacketType.TURN;
                         out.writeObject(accusePacket);
+                        
+                        clientUI.disableAllButtons();
+                        
                     } else if (line.toLowerCase().equals("e")) {
+                        
                         SocketPacket endTurnPacket = new SocketPacket();
                         endTurnPacket.packet_type = PacketType.TURN;
                         endTurnPacket.turn_type = SocketPacket.TurnType.END;
-                        System.out.println("Ending your turn...");
                         out.writeObject(endTurnPacket);
+                        
+                        clientUI.printlnUI("Ending your turn...");  
+                        clientUI.disableAllButtons();
                     } else {
-                        System.out.println("Invalid input. Please try again.");
+                        clientUI.printlnUI("Invalid input. Please try again.");
                         return handlePacketRcv(pkt, input, out);
                        
                     }
@@ -232,30 +223,25 @@ public class Client {
                 case DISPROVE:
                     switch (pkt.disprove_type) {
                         case REQUEST:
-                            System.out.println("Disprove with " + pkt.cards);
                             String linebuffer;
-                            Card disprove_with = new Card();
-                            System.out.println("Which card would you like to disprove with? ");
-                            if (input.hasNextLine()) {
-                                linebuffer = input.nextLine();
-                                disprove_with = new Card(linebuffer);
-                                SocketPacket disprovePacket  = new SocketPacket();
-                                disprovePacket.cards.add(disprove_with);
-                                out.writeObject(disprovePacket);
-                            } else {
-                                System.out.println(disprove_with + " is not in your current hand.");
-                            }
+                            linebuffer = clientUI.DisprovePopup(pkt.cards);
+                            
+                            Card disprove_with = new Card(linebuffer);
+                            SocketPacket disprovePacket  = new SocketPacket();
+                            disprovePacket.cards.add(disprove_with);
+                            out.writeObject(disprovePacket);
+                            
                             break;
                         default:
                             break;
                     }
                     break;
                 default:
-                    System.out.println("Cant decode packet");
+                    clientUI.printlnUI("Cant decode packet");
                     break;
             }
         } catch (IOException e) {
-            System.out.println(e);
+            clientUI.printlnUI(e.getMessage());
         }
 
         return true;
@@ -266,6 +252,7 @@ public class Client {
      * Constructor.
      */
     Client() {
+        
     }
 
     /**
@@ -280,6 +267,9 @@ public class Client {
         Socket cs = new Socket(ip, SERVER_PORT);
 
         System.out.println("Client started ");
+        
+        clientUI = new CCUI();
+        clientUI.show();
 
         ObjectOutputStream cout = new ObjectOutputStream(cs.getOutputStream()); // Note: cout must be initialized before
                                                                                 // cin
