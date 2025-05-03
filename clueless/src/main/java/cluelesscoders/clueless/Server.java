@@ -34,7 +34,7 @@ public class Server {
      */
     private static final int SERVER_PORT = 3834;
     // private static final int MAX_PLAYERS = 6;
-    private static final int MAX_PLAYERS = 2;
+    private static final int MAX_PLAYERS = 6;
     
     /**
      * Character to close Thread..

@@ -7,12 +7,21 @@ package cluelesscoders.clueless;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
@@ -24,6 +33,8 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 
 public class CCUI {
+
+    
     
     enum BUTTON_OPTION{
         MOVE, ACCUSE, SUGGEST, END_TURN
@@ -44,6 +55,7 @@ public class CCUI {
     public JPanel p4;
     public JPanel p5;
     public JPanel p6;
+    public JPanel p7;
     public JTextArea LOG;
     public JLabel myPos;
     public JLabel TurnIdx;
@@ -53,6 +65,62 @@ public class CCUI {
     public JButton Suggest;
     public JButton EndTurn;
     public JButton Submit;
+    public BufferedImage cluelessBoard;
+    public DrawPanel gameBoard;
+    
+    public ArrayList<AllRoom> player_locations;
+    private Map <AllRoom,Dimension> drawLoc;
+    
+    class DrawPanel extends JLabel{
+        @Override
+        protected void paintComponent(Graphics g){
+            super.paintComponent(g);
+            if (player_locations.isEmpty()){
+                return;
+            }
+            int r = 30;
+            Color c;
+            int index;
+            ArrayList<AllRoom> prev = new ArrayList<AllRoom>();
+
+
+            for(PlayerName p : PlayerName.values()){
+                index = p.ordinal();
+                switch(p){
+                    case PlayerName.Miss_Scarlet:
+                        c = Color.RED;
+                        break;
+                    case PlayerName.Colonel_Mustard:
+                        c = Color.YELLOW;
+                        break;
+                    case PlayerName.Mrs_White:
+                        c = Color.LIGHT_GRAY;
+                        break;
+                    case PlayerName.Mrs_Peacock:
+                        c = Color.BLUE;
+                        break;
+                    case PlayerName.Professor_Plum:
+                        c = Color.MAGENTA;
+                        break;
+                    case PlayerName.Reverend_Green:
+                        c = Color.GREEN;
+                        break;
+                    default:
+                        c = Color.BLACK;
+                }
+                AllRoom currRoom = player_locations.get(index);
+                Dimension coord = drawLoc.get(currRoom);
+                int x = coord.width;
+                int y = coord.height;
+                if(prev.contains(currRoom)){
+                    x = coord.width + 10*Collections.frequency(prev, currRoom);
+                }
+                prev.add(currRoom);
+                g.setColor(c);
+                g.fillOval(x,y, r, r);
+            }
+        }
+    };
     
     
     public CCUI(){
@@ -70,6 +138,7 @@ public class CCUI {
         p4 = new JPanel();
         p5 = new JPanel();
         p6 = new JPanel();
+        p7 = new JPanel();
         
         p0.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createEmptyBorder(5,5,5,5)
                 , BorderFactory.createLineBorder(Color.LIGHT_GRAY)));
@@ -207,7 +276,22 @@ public class CCUI {
         
         
         /**************/
-        
+        cluelessBoard = null;
+        try{
+            cluelessBoard = ImageIO.read(new File("graphics/CluelessBoard.png"));
+        }
+        catch(IOException e){
+            LOG.append(e.toString());
+        }
+        gameBoard = new DrawPanel();
+        p7.setSize(cluelessBoard.getWidth(),cluelessBoard.getHeight());
+        gameBoard.setIcon(new ImageIcon(cluelessBoard));
+        p7.add(gameBoard);
+        player_locations = new ArrayList<>();
+        initializeBoardLocation();
+       
+                
+                
         sz.gridx = 0;
         sz.gridy = 0;
         cWindow.add(p0,sz);
@@ -236,10 +320,42 @@ public class CCUI {
         sz.gridy = 6;
         cWindow.add(p6,sz);
         
+        sz.gridx = 1;
+        sz.gridy = 0;
+        sz.gridheight= 7;
+        cWindow.add(p7,sz);
+        
         cWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        cWindow.setMinimumSize(new Dimension(1080,200));
+        cWindow.setMinimumSize(new Dimension(1700,200));
         cWindow.setTitle("Clue-less Board");
         cWindow.pack();
+        
+    }
+    
+    private void initializeBoardLocation() {
+        drawLoc = new HashMap<>();
+        drawLoc.put(AllRoom.Study,new Dimension(75,100));
+        drawLoc.put(AllRoom.Study2Hall,new Dimension(200,65));
+        drawLoc.put(AllRoom.Hall, new Dimension(325,100));
+        drawLoc.put(AllRoom.Hall2Lounge,new Dimension(420,65));
+        drawLoc.put(AllRoom.Lounge, new Dimension(550,85));
+        drawLoc.put(AllRoom.Study2Library,new Dimension(75,175));
+        drawLoc.put(AllRoom.Hall2BillardRoom,new Dimension(325,175));
+        drawLoc.put(AllRoom.Lounge2DiningRoom,new Dimension(525,175));
+        drawLoc.put(AllRoom.Library,new Dimension(75,350));
+        drawLoc.put(AllRoom.Library2Billardroom,new Dimension(200,325));
+        drawLoc.put(AllRoom.Billiard_Room,new Dimension(325,350));
+        drawLoc.put(AllRoom.BilliardRoom2Diningroom,new Dimension(420,325));
+        drawLoc.put(AllRoom.Dining_Room,new Dimension(525,350));
+        drawLoc.put(AllRoom.Library2Conservatory,new Dimension(75,425));
+        drawLoc.put(AllRoom.BilliardRoom2Ballroom,new Dimension(325,425));
+        drawLoc.put(AllRoom.DiningRoom2Kitchen,new Dimension(525,425));   
+        drawLoc.put(AllRoom.Conservatory,new Dimension(75,500));
+        drawLoc.put(AllRoom.Conservatory2Ballroom,new Dimension(200,550));
+        drawLoc.put(AllRoom.Ballroom,new Dimension(325,575));
+        drawLoc.put(AllRoom.Ballroom2Kitchen,new Dimension(420,550));
+        drawLoc.put(AllRoom.Kitchen,new Dimension(550,500));
+        
         
     }
     
@@ -279,6 +395,12 @@ public class CCUI {
     public void updateTurn(String name){
         TurnIdx.setText(name);
         p2.validate();
+    }
+    
+    public void updateBoard(ArrayList<AllRoom> player_locations){
+        this.player_locations = player_locations;        
+        p7.revalidate();
+        gameBoard.repaint();
     }
     
     public String GetButtonInput(){

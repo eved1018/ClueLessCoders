@@ -66,7 +66,7 @@ public class Player {
         } 
     }
 
-    public SocketPacket playerTurnRequest(ArrayList<AllRoom> valid_rooms, Boolean can_suggest, Boolean can_accuse, AllRoom curr_room){
+    public SocketPacket playerTurnRequest(ArrayList<AllRoom> valid_rooms, Boolean can_suggest, Boolean can_accuse, AllRoom curr_room, ArrayList<AllRoom> player_locations){
         SocketPacket p = new SocketPacket();
         p.curr_player = this.name;
         p.packet_type = SocketPacket.PacketType.TURN;
@@ -76,6 +76,8 @@ public class Player {
         p.can_suggest = can_suggest;
         p.expect_response = true;
         p.destination = curr_room;
+        
+        p.player_locations = player_locations;
 
         
         try {

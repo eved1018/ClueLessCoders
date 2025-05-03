@@ -87,6 +87,7 @@ public class Client {
                                 case TURN:
                                     clientUI.printlnUI("It's " + pkt.curr_player + "'s turn.");
                                     clientUI.updateTurn(pkt.curr_player.name());
+                                    clientUI.updateBoard(pkt.player_locations);
                                     break;
                                 case END:
                                     clientUI.printlnUI(pkt.curr_player + " has won the game");
@@ -104,6 +105,11 @@ public class Client {
                                     clientUI.printlnUI("Player " + pkt.curr_player + " Suggests the murder was done by "
                                             + pkt.other_player
                                             + " in the " + pkt.crime_scene + " with the " + pkt.murder_weapon);
+                                    break;
+                                case ACCUSE:
+                                    clientUI.printlnUI("Player " + pkt.curr_player + " accuses "
+                                            + pkt.other_player
+                                            + " of the murder in the " + pkt.crime_scene + " using the " + pkt.murder_weapon);
                                     break;
                                 default:
                                     clientUI.printlnUI("Cant decode player turn broadcast packet");
@@ -128,7 +134,7 @@ public class Client {
                             }
                             break;
                         case PLAYER_OUT:
-                            clientUI.printlnUI("Player " + pkt.curr_player + " is out of the game.");
+                            clientUI.printlnUI("Player " + pkt.curr_player + " made an incorrect accusation and is out of the game.");
                             break;
                         default:
                             clientUI.printlnUI("Cant decode broadcast packet");
@@ -137,6 +143,7 @@ public class Client {
                     break;
                 case TURN:
 
+                    clientUI.updateBoard(pkt.player_locations);
                     String prompt =  "Server: Its your turn. Pick one of ";
                     
                     

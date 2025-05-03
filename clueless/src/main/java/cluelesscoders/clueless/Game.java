@@ -54,27 +54,32 @@ public class Game {
         this.board = new GameBoard();
         this.deckHelper = new DeckHelper();
         LOGGER.info("Game initialized.");
+        LOGGER.log(Level.INFO, "\nSecret Person: {0}\nSecret Weapon: {1}\nSecret Room: {2}", 
+                new Object[]{this.deckHelper.getSecretPerson().toString(), this.deckHelper.getSecretWeapon().toString(), this.deckHelper.getSecretRoom().toString()});
     }
 
     public void start_game(ArrayList<Player> player_list) {
         this.player_list = player_list;
         LOGGER.log(Level.INFO, "Starting game with players: {0}", player_list);
-
-        // Set secret cards
-        deckHelper.setSecretCards();
-        LOGGER.info("Secret cards set.");
-        LOGGER.log(Level.INFO, "Secret cards are: {0} | {1} | {2}", new Object[]{deckHelper.getSecretPerson().toString(), deckHelper.getSecretRoom().toString(), deckHelper.getSecretWeapon().toString()});
-
+        
+                
         // Distribute cards to players
         this.hands = deckHelper.distributeCards(player_list);
         LOGGER.info("Cards distributed to players.");
-
+        
         // Initialize starting positions for each player
         for (Player p : player_list) {
             AllRoom startingRoom = this.get_starting_room(p.name);
             p.currRoom = startingRoom;
             this.board.updatePlayerLocation(p.name, startingRoom);
             LOGGER.log(Level.INFO, "Player {0} placed in starting room: {1}", new Object[]{p.name, startingRoom});
+        }
+        
+        int npc_num = player_list.size();
+        while(npc_num < PlayerName.values().length){
+            PlayerName name = PlayerName.values()[npc_num];
+            this.board.updatePlayerLocation(name,this.get_starting_room(name));
+            npc_num++;
         }
 
         broadcastGameStart();
@@ -96,7 +101,7 @@ public class Game {
             case Colonel_Mustard:
                 return AllRoom.Lounge2DiningRoom;
             case Mrs_White:
-                return AllRoom.Conservatory2Ballroom;
+                return AllRoom.Ballroom2Kitchen;
             case Reverend_Green:
                 return AllRoom.Conservatory2Ballroom;
             case Mrs_Peacock:
@@ -115,7 +120,9 @@ public class Game {
         
         ArrayList<String> player_names = new ArrayList<String>();
         for (Player pl : this.player_list) {
-            player_names.add(pl.name.toString());
+            if(!pl.is_out){
+                player_names.add(pl.name.toString());
+            }
         }
         
         for (Player p : this.player_list) {
@@ -171,9 +178,10 @@ public class Game {
                 Card disprove_with_repsonse = op.sendDisproveRequest(disprove_with);
                 broadcastDisprove(op.name, p.name, disprove_with_repsonse);
                 LOGGER.log(Level.INFO, "Player {0} disproved the suggestion with: {1}", new Object[]{op.name, disprove_with_repsonse});
-                return;
+                
             }
         }
+        return;
     }
 
     public boolean game_loop() {
@@ -223,7 +231,11 @@ public class Game {
 
                 // request a turn from this player
                 turnBroadcast(p.name);
-                SocketPacket rpkt = p.playerTurnRequest(moves, can_suggest, can_accuse, p.currRoom);
+                ArrayList<AllRoom> player_locations = new ArrayList<AllRoom>();
+                for(PlayerName n : PlayerName.values()){
+                    player_locations.add(this.board.getPlayerLocation(n));
+                }
+                SocketPacket rpkt = p.playerTurnRequest(moves, can_suggest, can_accuse, p.currRoom, player_locations);
                 
                 LOGGER.log(Level.INFO, "Player {0} turn: {1}", new Object[]{p.name, rpkt.turn_type});
                 
@@ -245,6 +257,7 @@ public class Game {
                         break;
                     case ACCUSE:
                         is_player_turn = false;
+                        accuseBroadcast(rpkt.other_player, rpkt.murder_weapon, rpkt.crime_scene, p.name);
                         if (this.check_accusation(rpkt.murder_weapon, rpkt.other_player, rpkt.crime_scene)) {
                             // game over
                             LOGGER.log(Level.INFO, "Player {0} made a correct accusation and won the game.", p.name);
@@ -379,12 +392,32 @@ public class Game {
         }
     }
     
+     public void accuseBroadcast(PlayerName suspect, Weapon weapon, Room room, PlayerName accuser) {
+        SocketPacket p = new SocketPacket();
+        p.broadcast_type = SocketPacket.BroadcastType.TURN_MADE;
+        p.packet_type = SocketPacket.PacketType.BROADCAST;
+        p.turn_type = SocketPacket.TurnType.ACCUSE;
+        p.crime_scene = room;
+        p.other_player = suspect;
+        p.murder_weapon = weapon;
+        p.curr_player = accuser;
+        // player made accusation 
+        for (Player player : this.player_list) {
+            player.sendPacket(p);
+        }
+    }
+    
     public void turnBroadcast(PlayerName name){
         SocketPacket p = new SocketPacket();
         p.broadcast_type = SocketPacket.BroadcastType.GAME_STATE;
         p.packet_type = SocketPacket.PacketType.BROADCAST;
         p.game_state_update = SocketPacket.GameState.TURN;
         p.curr_player = name;
+        ArrayList<AllRoom> player_locations = new ArrayList<AllRoom>();
+        for(PlayerName n : PlayerName.values()){
+            player_locations.add(this.board.getPlayerLocation(n));
+        }
+        p.player_locations = player_locations;
         for (Player player : this.player_list) {
             player.sendPacket(p);
         }
